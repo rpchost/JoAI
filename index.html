@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JoAI - Crypto Prediction Engine</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .logo {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 40px 0;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 2em;
+            margin-bottom: 15px;
+        }
+
+        .feature-title {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+        }
+
+        .feature-description {
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+
+        .api-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            margin: 40px 0;
+        }
+
+        .api-title {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .api-examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .api-example {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .api-method {
+            color: #4CAF50;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .api-url {
+            font-family: 'Courier New', monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .api-body {
+            font-family: 'Courier New', monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            opacity: 0.7;
+        }
+
+        .status {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .status.online {
+            background: rgba(76, 175, 80, 0.2);
+            border-color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🤖 JoAI</div>
+            <div class="subtitle">Crypto Prediction Engine</div>
+            <div class="status online">
+                🚀 System Status: Online - MySQL Database Active
+            </div>
+        </header>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">🧠</div>
+                <div class="feature-title">AI-Powered Predictions</div>
+                <div class="feature-description">
+                    Advanced LSTM neural networks analyze market data with 22 technical indicators to forecast cryptocurrency price movements with high accuracy.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">💬</div>
+                <div class="feature-title">Natural Language Processing</div>
+                <div class="feature-description">
+                    Ask questions in plain English like "predict BTC for next hour" or "what will ETH be in 4 hours" and get instant AI responses.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <div class="feature-title">Real-Time Market Data</div>
+                <div class="feature-description">
+                    Live data from Binance with 6,000+ historical candles across BTCUSDT, ETHUSDT, ADAUSDT, and more major cryptocurrency pairs.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">💾</div>
+                <div class="feature-title">MySQL Database</div>
+                <div class="feature-description">
+                    Robust MySQL backend ensures data persistence, fast queries, and comprehensive API request logging for monitoring and analytics.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📈</div>
+                <div class="feature-title">Technical Indicators</div>
+                <div class="feature-description">
+                    Advanced indicators including RSI, MACD, Bollinger Bands, Stochastic, ATR, and moving averages for comprehensive market analysis.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <div class="feature-title">API Monitoring</div>
+                <div class="feature-description">
+                    Complete request/response logging with HTML dashboard for tracking usage, debugging, and performance monitoring.
+                </div>
+            </div>
+        </div>
+
+        <div class="api-section">
+            <div class="api-title">🚀 API Endpoints</div>
+
+            <div class="api-examples">
+                <div class="api-example">
+                    <div class="api-method">POST /nlp_predict</div>
+                    <div class="api-url">http://localhost:8081/nlp_predict</div>
+                    <div class="api-body">{
+  "query": "predict BTC for next hour",
+  "user_id": "your_user_id"
+}</div>
+                    <div><strong>Purpose:</strong> Natural language prediction queries</div>
+                </div>
+
+                <div class="api-example">
+                    <div class="api-method">POST /predict</div>
+                    <div class="api-url">http://localhost:8081/predict</div>
+                    <div class="api-body">{
+  "symbol": "BTCUSDT",
+  "timeframe": "1h"
+}</div>
+                    <div><strong>Purpose:</strong> Direct AI-powered predictions</div>
+                </div>
+
+                <div class="api-example">
+                    <div class="api-method">GET /logs/html</div>
+                    <div class="api-url">http://localhost:8081/logs/html</div>
+                    <div><strong>Purpose:</strong> View API request logs in HTML format</div>
+                </div>
+
+                <div class="api-example">
+                    <div class="api-method">GET /</div>
+                    <div class="api-url">http://localhost:8081/</div>
+                    <div><strong>Purpose:</strong> API status and information</div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>JoAI - Advanced Cryptocurrency Prediction Engine</p>
+            <p>Built with FastAPI, LSTM Neural Networks, and MySQL</p>
+            <p>© 2025 JoAI - Real-time AI-powered crypto predictions</p>
+        </footer>
+    </div>
+</body>
+</html>
