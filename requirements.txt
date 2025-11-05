@@ -10,3 +10,4 @@ python-dotenv==1.0.1
 pymysql==1.1.1
 setuptools>=65.0.0
 ta-lib>=0.4.28
+questdb>=2.0.0
