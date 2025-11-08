@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_db_config():
-    connection_type = os.getenv("DB_CONNECTION", "questdb").lower()
+    connection_type = os.getenv("DB_CONNECTION", "postgresql").lower()
 
     if connection_type == "mysql":
         return {
@@ -22,6 +22,22 @@ def get_db_config():
             "password": os.getenv("MYSQL_PASSWORD", ""),
             "charset": os.getenv("MYSQL_CHARSET", "utf8mb4")
         }
+    elif connection_type == "postgresql":
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            return {
+                "type": "postgresql",
+                "connection_string": database_url
+            }
+        else:
+            return {
+                "type": "postgresql",
+                "host": os.getenv("POSTGRES_HOST", "localhost"),
+                "port": int(os.getenv("POSTGRES_PORT", 5432)),
+                "database": os.getenv("POSTGRES_DATABASE", "joai_db"),
+                "user": os.getenv("POSTGRES_USER", "postgres"),
+                "password": os.getenv("POSTGRES_PASSWORD", "")
+            }
     else:  # default to questdb
         from questdb.ingress import Sender, TimestampNanos
         return {
@@ -125,6 +141,60 @@ def store_candles_questdb(df, db_config):
         print(f"Error storing data in QuestDB: {str(e)}")
         raise
 
+def store_candles_postgresql(df, db_config):
+    """Store candles in PostgreSQL database"""
+    try:
+        import psycopg2
+
+        if "connection_string" in db_config:
+            connection = psycopg2.connect(db_config["connection_string"])
+        else:
+            connection = psycopg2.connect(
+                host=db_config["host"],
+                user=db_config["user"],
+                password=db_config["password"],
+                database=db_config["database"],
+                port=db_config["port"]
+            )
+
+        try:
+            with connection.cursor() as cursor:
+                # Insert data with ON CONFLICT DO UPDATE (PostgreSQL equivalent of INSERT ... ON DUPLICATE KEY UPDATE)
+                sql = """
+                INSERT INTO crypto_candles (symbol, timestamp, open, high, low, close, volume)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (symbol, timestamp)
+                DO UPDATE SET
+                    open = EXCLUDED.open,
+                    high = EXCLUDED.high,
+                    low = EXCLUDED.low,
+                    close = EXCLUDED.close,
+                    volume = EXCLUDED.volume
+                """
+
+                inserted_count = 0
+                for _, row in df.iterrows():
+                    cursor.execute(sql, (
+                        row['symbol'],
+                        row['timestamp'],
+                        float(row['open']),
+                        float(row['high']),
+                        float(row['low']),
+                        float(row['close']),
+                        float(row['volume'])
+                    ))
+                    inserted_count += 1
+
+                connection.commit()
+                print(f"Stored {inserted_count} candles in PostgreSQL database")
+
+        finally:
+            connection.close()
+
+    except Exception as e:
+        print(f"Error storing data in PostgreSQL: {str(e)}")
+        raise
+
 def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
     """Main function to fetch from Binance and store in configured database"""
     try:
@@ -138,6 +208,8 @@ def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
         # Store based on database type
         if db_config["type"] == "mysql":
             store_candles_mysql(df, db_config)
+        elif db_config["type"] == "postgresql":
+            store_candles_postgresql(df, db_config)
         elif db_config["type"] == "questdb":
             store_candles_questdb(df, db_config)
         else:

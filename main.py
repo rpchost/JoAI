@@ -13,10 +13,15 @@ import logging
 from questdb.ingress import Sender, TimestampNanos
 import os
 from dotenv import load_dotenv
-import pymysql
+import psycopg2
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from appropriate .env file
+# Check system environment first (for Render deployment), then local .env files
+app_env = os.getenv('APP_ENV')  # Check system env var first (set by Render)
+if app_env == 'production':
+    load_dotenv(dotenv_path='.env.production')
+else:
+    load_dotenv(dotenv_path='.env')  # Default to development
 
 # Database configuration
 def get_db_config():
@@ -32,6 +37,22 @@ def get_db_config():
             "password": os.getenv("MYSQL_PASSWORD", ""),
             "charset": os.getenv("MYSQL_CHARSET", "utf8mb4")
         }
+    elif connection_type == "postgresql":
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            return {
+                "type": "postgresql",
+                "connection_string": database_url
+            }
+        else:
+            return {
+                "type": "postgresql",
+                "host": os.getenv("POSTGRES_HOST", "localhost"),
+                "port": int(os.getenv("POSTGRES_PORT", 5432)),
+                "database": os.getenv("POSTGRES_DATABASE", "joai_db"),
+                "user": os.getenv("POSTGRES_USER", "postgres"),
+                "password": os.getenv("POSTGRES_PASSWORD", "")
+            }
     else:  # default to questdb
         return {
             "type": "questdb",
@@ -108,6 +129,39 @@ def log_request_to_questdb(endpoint: str, request_data: dict, response_data: dic
                 print(f"MySQL Logged: {endpoint}")
             finally:
                 connection.close()
+        elif db_config["type"] == "postgresql":
+            # PostgreSQL logging implementation
+            try:
+                if "connection_string" in db_config:
+                    connection = psycopg2.connect(db_config["connection_string"])
+                else:
+                    connection = psycopg2.connect(
+                        host=db_config["host"],
+                        user=db_config["user"],
+                        password=db_config["password"],
+                        database=db_config["database"],
+                        port=db_config["port"]
+                    )
+                with connection.cursor() as cursor:
+                    sql = """
+                    INSERT INTO api_logs (client_ip, user_id, endpoint, request_json, response_json, status_code)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(sql, (
+                        client_ip or 'unknown',
+                        user_id or 'unknown',
+                        endpoint,
+                        json.dumps(request_data),
+                        json.dumps(response_data),
+                        status_code
+                    ))
+                connection.commit()
+                print(f"PostgreSQL Logged: {endpoint}")
+            except psycopg2.Error as e:
+                print(f"PostgreSQL logging error: {e}")
+            finally:
+                if 'connection' in locals():
+                    connection.close()
         else:
             print(f"Unsupported database type: {db_config['type']}")
     except Exception as e:
@@ -273,6 +327,43 @@ def predict_candle(request: PredictRequest, req: Request):
             df = pd.DataFrame(data)
             df = df.sort_values('timestamp')
 
+        elif db_config["type"] == "postgresql":
+            # Query PostgreSQL for fallback
+            try:
+                if "connection_string" in db_config:
+                    connection = psycopg2.connect(db_config["connection_string"])
+                else:
+                    connection = psycopg2.connect(
+                        host=db_config["host"],
+                        user=db_config["user"],
+                        password=db_config["password"],
+                        database=db_config["database"],
+                        port=db_config["port"]
+                    )
+                with connection.cursor() as cursor:
+                    cursor.execute(f"""
+                    SELECT timestamp, open, high, low, close, volume
+                    FROM crypto_candles
+                    WHERE symbol = '{request.symbol}'
+                    ORDER BY timestamp DESC
+                    LIMIT 60
+                    """)
+                    data = cursor.fetchall()
+                    column_names = [desc[0] for desc in cursor.description]
+                    data = [dict(zip(column_names, row)) for row in data]
+            except psycopg2.Error as e:
+                print(f"PostgreSQL query error: {e}")
+                data = []
+            finally:
+                if 'connection' in locals():
+                    connection.close()
+
+            if len(data) == 0:
+                raise HTTPException(status_code=404, detail="No data found for symbol")
+
+            df = pd.DataFrame(data)
+            df = df.sort_values('timestamp')
+
         elif db_config["type"] == "questdb":
             # Query QuestDB for fallback
             query = f"""
@@ -404,6 +495,38 @@ def get_logs_html():
                     total_count = count_result['count'] if count_result else 0
             finally:
                 connection.close()
+        elif db_config["type"] == "postgresql":
+            # Query PostgreSQL for logs
+            try:
+                if "connection_string" in db_config:
+                    connection = psycopg2.connect(db_config["connection_string"])
+                else:
+                    connection = psycopg2.connect(
+                        host=db_config["host"],
+                        user=db_config["user"],
+                        password=db_config["password"],
+                        database=db_config["database"],
+                        port=db_config["port"]
+                    )
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                    SELECT created_at as timestamp, client_ip, user_id, endpoint, request_json, response_json, status_code
+                    FROM api_logs
+                    ORDER BY created_at DESC
+                    LIMIT 50
+                    """)
+                    logs = cursor.fetchall()
+
+                    cursor.execute("SELECT COUNT(*) as count FROM api_logs")
+                    count_result = cursor.fetchone()
+                    total_count = count_result[0] if count_result else 0
+            except psycopg2.Error as e:
+                print(f"PostgreSQL query error: {e}")
+                logs = []
+                total_count = 0
+            finally:
+                if 'connection' in locals():
+                    connection.close()
         else:
             return HTMLResponse(content=f"""
             <html><body>
@@ -459,9 +582,17 @@ def get_logs_html():
                     client_ip = log['client_ip']
                     user_id = log['user_id']
                     endpoint = log['endpoint']
+                elif db_config["type"] == "postgresql":
+                    req_json = log[4] if len(log) > 4 else '{}'
+                    resp_json = log[5] if len(log) > 5 else '{}'
+                    timestamp = log[0]
+                    client_ip = log[1]
+                    user_id = log[2]
+                    endpoint = log[3]
 
-                req_data = json.loads(req_json) if req_json and req_json != 'null' else {}
-                resp_data = json.loads(resp_json) if resp_json and resp_json != 'null' else {}
+                # PostgreSQL JSONB columns are returned as dict objects, not strings
+                req_data = req_json if isinstance(req_json, dict) else (json.loads(req_json) if req_json and req_json != 'null' else {})
+                resp_data = resp_json if isinstance(resp_json, dict) else (json.loads(resp_json) if resp_json and resp_json != 'null' else {})
 
                 status_color = "success"
                 if isinstance(resp_data, dict) and resp_data.get("success") is False:
@@ -483,21 +614,45 @@ def get_logs_html():
                     </div>
                 </div>
                 """
-            except (json.JSONDecodeError, IndexError, KeyError) as e:
+            except Exception as e:
+                # Handle JSON parsing errors gracefully
+                try:
+                    if db_config["type"] == "postgresql":
+                        timestamp = log[0] if len(log) > 0 else 'Unknown'
+                        endpoint = log[3] if len(log) > 3 else 'Unknown'
+                        client_ip = log[1] if len(log) > 1 else 'Unknown'
+                        user_id = log[2] if len(log) > 2 else 'Unknown'
+                        raw_request = str(log[4]) if len(log) > 4 else 'N/A'
+                        raw_response = str(log[5]) if len(log) > 5 else 'N/A'
+                    else:
+                        timestamp = log.get('timestamp', log[0] if len(log) > 0 else 'Unknown')
+                        endpoint = log.get('endpoint', log[3] if len(log) > 3 else 'Unknown')
+                        client_ip = log.get('client_ip', log[1] if len(log) > 1 else 'Unknown')
+                        user_id = log.get('user_id', log[2] if len(log) > 2 else 'Unknown')
+                        raw_request = str(log.get('request_json', log[4] if len(log) > 4 else 'N/A'))
+                        raw_response = str(log.get('response_json', log[5] if len(log) > 5 else 'N/A'))
+                except:
+                    timestamp = 'Unknown'
+                    endpoint = 'Unknown'
+                    client_ip = 'Unknown'
+                    user_id = 'Unknown'
+                    raw_request = 'Error'
+                    raw_response = 'Error'
+
                 html_content += f"""
                 <div class="log-entry error">
-                    <div class="timestamp">🕐 {log.get('timestamp', log[0] if len(log) > 0 else 'Unknown')}</div>
-                    <div class="endpoint">📍 {log.get('endpoint', log[3] if len(log) > 3 else 'Unknown')}</div>
-                    <div class="client-ip">🌐 Client: {log.get('client_ip', log[1] if len(log) > 1 else 'Unknown')}</div>
-                    <div class="user-id">👤 User ID: {log.get('user_id', log[2] if len(log) > 2 else 'Unknown')}</div>
+                    <div class="timestamp">🕐 {timestamp}</div>
+                    <div class="endpoint">📍 {endpoint}</div>
+                    <div class="client-ip">🌐 Client: {client_ip}</div>
+                    <div class="user-id">👤 User ID: {user_id}</div>
                     <div>❌ Error parsing log entry: {str(e)}</div>
                     <div class="request">
                         <strong>Raw Request:</strong><br>
-                        <pre>{log.get('request_json', log[4] if len(log) > 4 else 'N/A')}</pre>
+                        <pre>{raw_request}</pre>
                     </div>
                     <div class="response">
                         <strong>Raw Response:</strong><br>
-                        <pre>{log.get('response_json', log[5] if len(log) > 5 else 'N/A')}</pre>
+                        <pre>{raw_response}</pre>
                     </div>
                 </div>
                 """

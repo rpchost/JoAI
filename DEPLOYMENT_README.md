@@ -63,28 +63,39 @@ curl https://rpchost.pythonanywhere.com/logs/html
 ### Common Issues:
 
 1. **TensorFlow Import Error**
-   - PythonAnywhere has limited TensorFlow support
-   - Consider using a lighter ML library or cloud ML service
+    - PythonAnywhere has limited TensorFlow support
+    - Consider using a lighter ML library or cloud ML service
 
 2. **Memory Limits**
-   - PythonAnywhere free tier has 512MB limit
-   - LSTM models may exceed memory limits
-   - Consider using smaller models or cloud deployment
+    - PythonAnywhere free tier has 512MB limit
+    - LSTM models may exceed memory limits
+    - Consider using smaller models or cloud deployment
 
 3. **Database Connection**
-   - Ensure MySQL credentials are correct in `pythonanywhere_wsgi.py`
-   - Database name should be `username$database_name`
+    - Ensure MySQL credentials are correct in `pythonanywhere_wsgi.py`
+    - Database name should be `username$database_name`
 
 4. **Model Loading**
-   - Ensure model files are uploaded to correct path
-   - Check file permissions: `chmod 644 models/*`
+    - Ensure model files are uploaded to correct path
+    - Check file permissions: `chmod 644 models/*`
 
 ### Alternative Deployment Options:
 
-1. **Railway** - Better for ML workloads
-2. **Render** - Free tier with persistent storage
-3. **DigitalOcean App Platform** - More resources
-4. **Google Cloud Run** - Serverless with GPU support
+#### **Render (Recommended for PostgreSQL)**
+- **Database**: Native PostgreSQL support with Render PostgreSQL
+- **Setup**: One-click database creation, automatic connection strings
+- **Free Tier**: 1GB PostgreSQL database included
+- **Scaling**: Automatic scaling with web service
+- **Environment**: Container-based, matches local Docker setup
+
+#### **Railway**
+- Better for ML workloads with persistent storage
+
+#### **DigitalOcean App Platform**
+- More resources available
+
+#### **Google Cloud Run**
+- Serverless with GPU support
 
 ## 📊 Monitoring
 
