@@ -8,7 +8,7 @@ import pandas as pd
 import os
 import requests
 import pickle
-import pymysql
+import psycopg2
 from sklearn.preprocessing import MinMaxScaler
 from utils.indicators import add_technical_indicators
 from dotenv import load_dotenv
@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def get_db_config():
-    connection_type = os.getenv("DB_CONNECTION", "questdb").lower()
+    connection_type = os.getenv("DB_CONNECTION", "postgresql").lower()
 
     if connection_type == "mysql":
         return {
@@ -29,6 +29,22 @@ def get_db_config():
             "password": os.getenv("MYSQL_PASSWORD", ""),
             "charset": os.getenv("MYSQL_CHARSET", "utf8mb4")
         }
+    elif connection_type == "postgresql":
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            return {
+                "type": "postgresql",
+                "connection_string": database_url
+            }
+        else:
+            return {
+                "type": "postgresql",
+                "host": os.getenv("POSTGRES_HOST", "localhost"),
+                "port": int(os.getenv("POSTGRES_PORT", 5432)),
+                "database": os.getenv("POSTGRES_DATABASE", "joai_db"),
+                "user": os.getenv("POSTGRES_USER", "postgres"),
+                "password": os.getenv("POSTGRES_PASSWORD", "")
+            }
     else:  # default to questdb
         from questdb.ingress import Sender, TimestampNanos
         return {
@@ -77,6 +93,44 @@ class LSTMCryptoPredictor:
                     data = cursor.fetchall()
             finally:
                 connection.close()
+
+            if len(data) < self.sequence_length + 10:  # Need minimum data for training
+                raise Exception(f"Insufficient data for training. Need at least {self.sequence_length + 10} records")
+
+            df = pd.DataFrame(data)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df.sort_values('timestamp')
+
+        elif db_config["type"] == "postgresql":
+            # Fetch from PostgreSQL
+            try:
+                if "connection_string" in db_config:
+                    connection = psycopg2.connect(db_config["connection_string"])
+                else:
+                    connection = psycopg2.connect(
+                        host=db_config["host"],
+                        user=db_config["user"],
+                        password=db_config["password"],
+                        database=db_config["database"],
+                        port=db_config["port"]
+                    )
+                with connection.cursor() as cursor:
+                    cursor.execute(f"""
+                    SELECT timestamp, open, high, low, close, volume
+                    FROM crypto_candles
+                    WHERE symbol = '{self.symbol}'
+                    ORDER BY timestamp ASC
+                    LIMIT {limit}
+                    """)
+                    data = cursor.fetchall()
+                    column_names = [desc[0] for desc in cursor.description]
+                    data = [dict(zip(column_names, row)) for row in data]
+            except psycopg2.Error as e:
+                print(f"PostgreSQL query error: {e}")
+                data = []
+            finally:
+                if 'connection' in locals():
+                    connection.close()
 
             if len(data) < self.sequence_length + 10:  # Need minimum data for training
                 raise Exception(f"Insufficient data for training. Need at least {self.sequence_length + 10} records")
@@ -282,6 +336,41 @@ class LSTMCryptoPredictor:
                 for col in ['open', 'high', 'low', 'close', 'volume']:
                     if col in recent_data.columns:
                         recent_data[col] = recent_data[col].astype(float)
+                recent_data = recent_data.sort_values('timestamp')
+
+            elif db_config["type"] == "postgresql":
+                # Fetch recent data from PostgreSQL
+                try:
+                    if "connection_string" in db_config:
+                        connection = psycopg2.connect(db_config["connection_string"])
+                    else:
+                        connection = psycopg2.connect(
+                            host=db_config["host"],
+                            user=db_config["user"],
+                            password=db_config["password"],
+                            database=db_config["database"],
+                            port=db_config["port"]
+                        )
+                    with connection.cursor() as cursor:
+                        cursor.execute(f"""
+                        SELECT timestamp, open, high, low, close, volume
+                        FROM crypto_candles
+                        WHERE symbol = '{self.symbol}'
+                        ORDER BY timestamp DESC
+                        LIMIT {self.sequence_length + 10}
+                        """)
+                        data = cursor.fetchall()
+                        column_names = [desc[0] for desc in cursor.description]
+                        data = [dict(zip(column_names, row)) for row in data]
+                except psycopg2.Error as e:
+                    print(f"PostgreSQL query error: {e}")
+                    data = []
+                finally:
+                    if 'connection' in locals():
+                        connection.close()
+
+                recent_data = pd.DataFrame(data)
+                recent_data['timestamp'] = pd.to_datetime(recent_data['timestamp'])
                 recent_data = recent_data.sort_values('timestamp')
 
             elif db_config["type"] == "questdb":
