@@ -679,6 +679,164 @@ def clear_logs():
     request_logs.clear()
     return {"message": "All logs cleared"}
 
+@app.post("/init_db")
+def init_database():
+    """Initialize database: check/create tables and populate crypto data"""
+    try:
+        db_config = get_db_config()
+
+        if db_config["type"] != "postgresql":
+            return {
+                "success": False,
+                "message": f"Database initialization only supported for PostgreSQL. Current type: {db_config['type']}"
+            }
+
+        # Import required functions
+        from fetch_data import populate_multiple_symbols
+
+        # Connect to database
+        if "connection_string" in db_config:
+            connection = psycopg2.connect(db_config["connection_string"])
+        else:
+            connection = psycopg2.connect(
+                host=db_config["host"],
+                user=db_config["user"],
+                password=db_config["password"],
+                database=db_config["database"],
+                port=db_config["port"]
+            )
+
+        results = {
+            "api_logs": {"status": "unknown", "action": "none"},
+            "crypto_candles": {"status": "unknown", "action": "none"}
+        }
+
+        try:
+            with connection.cursor() as cursor:
+                # Check and create api_logs table
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'api_logs'
+                    )
+                """)
+                api_logs_exists = cursor.fetchone()[0]
+
+                if not api_logs_exists:
+                    # Create api_logs table
+                    create_api_logs_table = """
+                    CREATE TABLE api_logs (
+                        id SERIAL PRIMARY KEY,
+                        client_ip VARCHAR(45) NOT NULL,
+                        user_id VARCHAR(100) NOT NULL DEFAULT 'unknown',
+                        endpoint VARCHAR(255) NOT NULL,
+                        request_json JSONB,
+                        response_json JSONB,
+                        status_code INT NOT NULL DEFAULT 200,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE INDEX idx_api_logs_client_ip ON api_logs (client_ip);
+                    CREATE INDEX idx_api_logs_user_id ON api_logs (user_id);
+                    CREATE INDEX idx_api_logs_endpoint ON api_logs (endpoint);
+                    CREATE INDEX idx_api_logs_created_at ON api_logs (created_at);
+                    """
+                    cursor.execute(create_api_logs_table)
+                    results["api_logs"] = {"status": "created", "action": "created table with indexes"}
+                    print("api_logs table created successfully")
+                else:
+                    # Check if table has required columns
+                    cursor.execute("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = 'api_logs'
+                        ORDER BY ordinal_position
+                    """)
+                    columns = [row[0] for row in cursor.fetchall()]
+                    required_columns = ['id', 'client_ip', 'user_id', 'endpoint', 'request_json', 'response_json', 'status_code', 'created_at']
+
+                    if all(col in columns for col in required_columns):
+                        results["api_logs"] = {"status": "exists", "action": "table exists with required fields"}
+                    else:
+                        results["api_logs"] = {"status": "incomplete", "action": "table exists but missing some fields"}
+                        print(f"api_logs table exists but missing columns. Has: {columns}")
+
+                # Check and create/populate crypto_candles table
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'crypto_candles'
+                    )
+                """)
+                crypto_candles_exists = cursor.fetchone()[0]
+
+                if not crypto_candles_exists:
+                    # Create crypto_candles table
+                    create_crypto_candles_table = """
+                    CREATE TABLE crypto_candles (
+                        id SERIAL PRIMARY KEY,
+                        symbol VARCHAR(20) NOT NULL,
+                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        open DECIMAL(20,8) NOT NULL,
+                        high DECIMAL(20,8) NOT NULL,
+                        low DECIMAL(20,8) NOT NULL,
+                        close DECIMAL(20,8) NOT NULL,
+                        volume DECIMAL(20,8) NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(symbol, timestamp)
+                    );
+                    CREATE INDEX idx_crypto_candles_symbol ON crypto_candles (symbol);
+                    CREATE INDEX idx_crypto_candles_timestamp ON crypto_candles (timestamp);
+                    CREATE INDEX idx_crypto_candles_symbol_timestamp ON crypto_candles (symbol, timestamp);
+                    """
+                    cursor.execute(create_crypto_candles_table)
+                    results["crypto_candles"] = {"status": "created", "action": "created table with indexes"}
+                    print("crypto_candles table created successfully")
+                    populate_data = True
+                else:
+                    # Check if table has data
+                    cursor.execute("SELECT COUNT(*) FROM crypto_candles")
+                    data_count = cursor.fetchone()[0]
+
+                    if data_count == 0:
+                        results["crypto_candles"] = {"status": "empty", "action": "table exists but no data"}
+                        print(f"crypto_candles table exists but is empty (0 records)")
+                        populate_data = True
+                    else:
+                        results["crypto_candles"] = {"status": "populated", "action": f"table exists with {data_count} records"}
+                        print(f"crypto_candles table exists with {data_count} records")
+                        populate_data = False
+
+            connection.commit()
+
+            # Populate crypto data if needed
+            if populate_data:
+                print("Starting data population...")
+                try:
+                    populate_multiple_symbols()
+                    results["crypto_candles"]["action"] += " - data populated"
+                    print("Data population completed successfully")
+                except Exception as e:
+                    results["crypto_candles"]["action"] += f" - data population failed: {str(e)}"
+                    print(f"Data population failed: {str(e)}")
+
+        finally:
+            connection.close()
+
+        return {
+            "success": True,
+            "message": "Database initialization completed",
+            "results": results
+        }
+
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Database initialization failed: {str(e)}"
+        }
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("APP_PORT", 8081))

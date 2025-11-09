@@ -369,13 +369,16 @@ class LSTMCryptoPredictor:
                     if 'connection' in locals():
                         connection.close()
 
-                recent_data = pd.DataFrame(data)
-                recent_data['timestamp'] = pd.to_datetime(recent_data['timestamp'])
-                recent_data = recent_data.sort_values('timestamp')
+                if not data:
+                    raise Exception(f"No data found for symbol {self.symbol} in PostgreSQL database")
 
-                # Convert any remaining timestamp issues
+                recent_data = pd.DataFrame(data)
                 if 'timestamp' in recent_data.columns:
                     recent_data['timestamp'] = pd.to_datetime(recent_data['timestamp'], errors='coerce')
+                    recent_data = recent_data.dropna(subset=['timestamp'])
+                    recent_data = recent_data.sort_values('timestamp')
+                else:
+                    raise Exception("No timestamp column found in PostgreSQL data")
 
             elif db_config["type"] == "questdb":
                 # Fetch recent data from QuestDB
