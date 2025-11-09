@@ -136,8 +136,8 @@ class LSTMCryptoPredictor:
                 raise Exception(f"Insufficient data for training. Need at least {self.sequence_length + 10} records")
 
             df = pd.DataFrame(data)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df = df.sort_values('timestamp')
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+            df = df.sort_values('timestamp').dropna()
 
         elif db_config["type"] == "questdb":
             # Fetch from QuestDB
@@ -372,6 +372,10 @@ class LSTMCryptoPredictor:
                 recent_data = pd.DataFrame(data)
                 recent_data['timestamp'] = pd.to_datetime(recent_data['timestamp'])
                 recent_data = recent_data.sort_values('timestamp')
+
+                # Convert any remaining timestamp issues
+                if 'timestamp' in recent_data.columns:
+                    recent_data['timestamp'] = pd.to_datetime(recent_data['timestamp'], errors='coerce')
 
             elif db_config["type"] == "questdb":
                 # Fetch recent data from QuestDB
