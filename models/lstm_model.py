@@ -380,6 +380,11 @@ class LSTMCryptoPredictor:
                 else:
                     raise Exception("No timestamp column found in PostgreSQL data")
 
+                # Convert decimal.Decimal to float for all numeric columns
+                for col in ['open', 'high', 'low', 'close', 'volume']:
+                    if col in recent_data.columns:
+                        recent_data[col] = recent_data[col].apply(lambda x: float(x) if hasattr(x, '__float__') else x)
+
             elif db_config["type"] == "questdb":
                 # Fetch recent data from QuestDB
                 query = f"""
@@ -435,9 +440,9 @@ class LSTMCryptoPredictor:
         predicted_close = self.target_scaler.inverse_transform([[predicted_scaled]])[0][0]
 
         # Get last known prices for OHLC calculation
-        last_close = recent_data['close'].iloc[-1]
-        last_high = recent_data['high'].iloc[-1]
-        last_low = recent_data['low'].iloc[-1]
+        last_close = float(recent_data['close'].iloc[-1])
+        last_high = float(recent_data['high'].iloc[-1])
+        last_low = float(recent_data['low'].iloc[-1])
 
         # Estimate OHLC based on predicted close
         volatility = recent_data['close'].pct_change().std()
