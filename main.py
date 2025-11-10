@@ -206,6 +206,28 @@ def home():
 def test_endpoint():
     """Simple test endpoint that returns a static string"""
     return "Hello from JoAI! Server is running successfully."
+@app.get("/test_db")
+def test_database_connection():
+    """Test PostgreSQL database connection"""
+    try:
+        print("Testing database connection...")
+        connection = psycopg2.connect("postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a.oregon-postgres.render.com/joai_db")
+
+        # Test a simple query
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1 as test")
+            result = cursor.fetchone()
+            print(f"Query result: {result}")
+
+        connection.close()
+        print("Database connection successful!")
+        return {"connected": True, "message": "Database connection successful"}
+
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"connected": False, "message": f"Database connection failed: {str(e)}"}
 
 # Remove NLP processor initialization - not needed anymore
 
