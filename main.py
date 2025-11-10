@@ -202,6 +202,11 @@ def home():
     except FileNotFoundError:
         return {"message": "Jo AI is running. Use POST /predict or POST /nlp_predict"}
 
+@app.get("/test")
+def test_endpoint():
+    """Simple test endpoint that returns a static string"""
+    return "Hello from JoAI! Server is running successfully."
+
 # Remove NLP processor initialization - not needed anymore
 
 @app.post("/nlp_predict")
