@@ -439,73 +439,25 @@ def get_logs():
 
 @app.get("/logs/html")
 def get_logs_html():
-    """View logs from database in HTML format for easy reading"""
+    """View logs from database in HTML format for easy reading - simplified version for Render"""
+    print("=== /logs/html endpoint called ===")
+
     try:
+        print("Getting database config...")
+        # Simplified version - just return basic stats without complex DB queries
         db_config = get_db_config()
+        print(f"Database type: {db_config['type']}")
 
-        if db_config["type"] == "questdb":
-            # Query QuestDB for logs
-            query = """
-            SELECT timestamp, client_ip, user_id, endpoint, request_json, response_json, status_code
-            FROM api_logs
-            ORDER BY timestamp DESC
-            LIMIT 50
-            """
-
-            questdb_url = db_config["url"]
-            response = requests.get(f"{questdb_url}/exec", params={'query': query})
-
-            if response.status_code != 200:
-                return HTMLResponse(content=f"""
-                <html><body>
-                <h1>❌ Error Loading Logs</h1>
-                <p>Failed to connect to QuestDB: {response.status_code}</p>
-                </body></html>
-                """, media_type="text/html")
-
-            data = response.json()
-            logs = data.get('dataset', [])
-
-            # Count total logs for stats
-            count_query = "SELECT COUNT(*) FROM api_logs"
-            count_response = requests.get(f"{questdb_url}/exec", params={'query': count_query})
-            total_count = 0
-            if count_response.status_code == 200:
-                count_data = count_response.json()
-                if count_data.get('dataset'):
-                    total_count = count_data['dataset'][0][0]
-
-        elif db_config["type"] == "mysql":
-            # Query MySQL for logs
-            connection = pymysql.connect(
-                host=db_config["host"],
-                user=db_config["user"],
-                password=db_config["password"],
-                database=db_config["database"],
-                charset=db_config["charset"],
-                cursorclass=pymysql.cursors.DictCursor
-            )
-            try:
-                with connection.cursor() as cursor:
-                    cursor.execute("""
-                    SELECT created_at as timestamp, client_ip, user_id, endpoint, request_json, response_json, status_code
-                    FROM api_logs
-                    ORDER BY created_at DESC
-                    LIMIT 50
-                    """)
-                    logs = cursor.fetchall()
-
-                    cursor.execute("SELECT COUNT(*) as count FROM api_logs")
-                    count_result = cursor.fetchone()
-                    total_count = count_result['count'] if count_result else 0
-            finally:
-                connection.close()
-        elif db_config["type"] == "postgresql":
-            # Query PostgreSQL for logs
-            try:
+        # Simple count query only (much lighter)
+        total_count = 0
+        try:
+            print("Attempting database connection...")
+            if db_config["type"] == "postgresql":
                 if "connection_string" in db_config:
+                    print(f"Using connection string: {db_config['connection_string'][:50]}...")
                     connection = psycopg2.connect(db_config["connection_string"])
                 else:
+                    print("Using individual connection parameters")
                     connection = psycopg2.connect(
                         host=db_config["host"],
                         user=db_config["user"],
@@ -513,32 +465,20 @@ def get_logs_html():
                         database=db_config["database"],
                         port=db_config["port"]
                     )
+                print("Database connected successfully")
                 with connection.cursor() as cursor:
-                    cursor.execute("""
-                    SELECT created_at as timestamp, client_ip, user_id, endpoint, request_json, response_json, status_code
-                    FROM api_logs
-                    ORDER BY created_at DESC
-                    LIMIT 50
-                    """)
-                    logs = cursor.fetchall()
-
-                    cursor.execute("SELECT COUNT(*) as count FROM api_logs")
-                    count_result = cursor.fetchone()
-                    total_count = count_result[0] if count_result else 0
-            except psycopg2.Error as e:
-                print(f"PostgreSQL query error: {e}")
-                logs = []
-                total_count = 0
-            finally:
-                if 'connection' in locals():
-                    connection.close()
-        else:
-            return HTMLResponse(content=f"""
-            <html><body>
-            <h1>❌ Error Loading Logs</h1>
-            <p>Unsupported database type: {db_config['type']}</p>
-            </body></html>
-            """, media_type="text/html")
+                    print("Executing COUNT query...")
+                    cursor.execute("SELECT COUNT(*) FROM api_logs")
+                    result = cursor.fetchone()
+                    total_count = result[0] if result else 0
+                    print(f"Query result: {total_count}")
+                connection.close()
+                print("Database connection closed")
+        except Exception as e:
+            print(f"DB count error: {e}")
+            import traceback
+            traceback.print_exc()
+            total_count = f"Error: {str(e)}"
 
         html_content = f"""
         <html>
