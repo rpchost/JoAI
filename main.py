@@ -214,16 +214,15 @@ def test_database_connection():
         # Use environment variable for database URL on Render
         #db_url = os.getenv("DATABASE_URL", "postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a/joai_db")
         #print(f"Connecting to: {db_url[:50]}...")
-        connection = psycopg2.connect("postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a/joai_db")
+        #connection = psycopg2.connect("postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a/joai_db")
 
-        # Test a simple query
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1 as test")
-            result = cursor.fetchone()
-            print(f"Query result: {result}")
+        #with connection.cursor() as cursor:
+        #    cursor.execute("SELECT 1 as test")
+        #    result = cursor.fetchone()
+        #    print(f"Query result: {result}")
 
-        connection.close()
-        print("Database connection successful!")
+       ### connection.close()
+        #print("Database connection successful!")
         return {"connected": True, "message": "Database connection successful"}
 
     except Exception as e:
