@@ -211,7 +211,10 @@ def test_database_connection():
     """Test PostgreSQL database connection"""
     try:
         print("Testing database connection...")
-        connection = psycopg2.connect("postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a.oregon-postgres.render.com/joai_db")
+        # Use environment variable for database URL on Render
+        db_url = os.getenv("DATABASE_URL", "postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a.oregon-postgres.render.com/joai_db")
+        print(f"Connecting to: {db_url[:50]}...")
+        connection = psycopg2.connect(db_url)
 
         # Test a simple query
         with connection.cursor() as cursor:
