@@ -3,12 +3,12 @@ databases:
     databaseName: joai_db1
     user: joai_user1
     plan: free # Free tier: 1 GB storage, expires after 90 days
-    ipAllowList: [] # Allow connections from any IP
+    #ipAllowList: [] # Allow connections from any IP
 
 services:
   - type: web
     name: joai
-    runtime: python3
+    runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
