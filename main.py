@@ -18,10 +18,10 @@ import psycopg2
 # Load environment variables from appropriate .env file
 # Check system environment first (for Render deployment), then local .env files
 app_env = os.getenv('APP_ENV')  # Check system env var first (set by Render)
-if app_env == 'production':
-    load_dotenv(dotenv_path='.env.production')
-else:
-    load_dotenv(dotenv_path='.env')  # Default to development
+# if app_env == 'production':
+#     load_dotenv(dotenv_path='.env.production')
+# else:
+load_dotenv(dotenv_path='.env')  # Default to development
 
 # Database configuration
 def get_db_config():
@@ -211,10 +211,23 @@ def test_database_connection():
     """Test PostgreSQL database connection"""
     try:
         print("Testing database connection...")
-        # Use environment variable for database URL on Render
-        #db_url = os.getenv("DATABASE_URL", "postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a/joai_db")
-        #print(f"Connecting to: {db_url[:50]}...")
-        connection = psycopg2.connect("postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a/joai_db")
+        db_config = get_db_config()
+
+        if db_config["type"] == "postgresql":
+            if "connection_string" in db_config:
+                print(f"Using DATABASE_URL: {db_config['connection_string'][:50]}...")
+                connection = psycopg2.connect(db_config["connection_string"])
+            else:
+                print("Using individual credentials from .env")
+                connection = psycopg2.connect(
+                    host=db_config["host"],
+                    user=db_config["user"],
+                    password=db_config["password"],
+                    database=db_config["database"],
+                    port=db_config["port"]
+                )
+        else:
+            return {"connected": False, "message": f"Database type {db_config['type']} not supported for test_db endpoint"}
 
         #with connection.cursor() as cursor:
         #    cursor.execute("SELECT 1 as test")

@@ -8,14 +8,18 @@ load_dotenv()
 def test_database_connection():
     """Test database connection and show database statistics"""
     db_type = os.getenv('DB_CONNECTION', 'questdb').lower()
+    print(f"DB_CONNECTION: {db_type}")
 
     try:
         if db_type == 'postgresql':
             # Test PostgreSQL connection
             database_url = os.getenv("DATABASE_URL")
+            print(f"DATABASE_URL: {database_url}")
             if database_url:
+                print("Attempting connection with DATABASE_URL...")
                 conn = psycopg2.connect(database_url)
             else:
+                print("DATABASE_URL not found, using individual env vars...")
                 conn = psycopg2.connect(
                     host=os.getenv('POSTGRES_HOST', 'localhost'),
                     user=os.getenv('POSTGRES_USER', 'postgres'),
@@ -23,6 +27,9 @@ def test_database_connection():
                     database=os.getenv('POSTGRES_DATABASE', 'joai_db'),
                     port=int(os.getenv('POSTGRES_PORT', 5432))
                 )
+
+            # Add connection success logging
+            print("Connection established successfully!")
 
             cursor = conn.cursor()
 
@@ -61,7 +68,10 @@ def test_database_connection():
             print(f"Unsupported database type: {db_type}")
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Connection failed with error: {e}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     test_database_connection()
