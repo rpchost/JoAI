@@ -213,30 +213,40 @@ def test_database_connection():
         print("Testing database connection...")
         db_config = get_db_config()
 
-        if db_config["type"] == "postgresql":
-            if "connection_string" in db_config:
-                print(f"Using DATABASE_URL: {db_config['connection_string'][:50]}...")
-                connection = psycopg2.connect(db_config["connection_string"])
-            else:
-                print("Using individual credentials from .env")
-                connection = psycopg2.connect(
-                    host=db_config["host"],
-                    user=db_config["user"],
-                    password=db_config["password"],
-                    database=db_config["database"],
-                    port=db_config["port"]
-                )
-        else:
-            return {"connected": False, "message": f"Database type {db_config['type']} not supported for test_db endpoint"}
+        #if db_config["type"] == "postgresql":
+            # if "connection_string" in db_config:
+            #     print(f"Using DATABASE_URL: {db_config['connection_string'][:50]}...")
+            #     connection = psycopg2.connect(db_config["connection_string"])
+            # else:
+        print("Using individual credentials from .env")
+        connection = psycopg2.connect(
+            host=db_config["host"],
+            user=db_config["user"],
+            password=db_config["password"],
+            database=db_config["database"],
+            port=db_config["port"]
+        )
 
-        #with connection.cursor() as cursor:
-        #    cursor.execute("SELECT 1 as test")
-        #    result = cursor.fetchone()
-        #    print(f"Query result: {result}")
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1 as test")
+            test_result = cursor.fetchone()
+            print(f"Query result: {test_result}")
 
-       ### connection.close()
-        #print("Database connection successful!")
-        return {"connected": True, "message": "Database connection successful"}
+            # Get first record from api_logs table
+            cursor.execute("SELECT * FROM CRYPTO_CANDLES ORDER BY TIMESTAMP DESC LIMIT 1")
+            first_log = cursor.fetchone()
+            print(f"First log record: {first_log}")
+
+        connection.close()
+        print("Database connection successful!")
+        return {
+            "connected": True,
+            "message": "Database connection successful",
+            "test_result": test_result,
+            "first_log": first_log
+        }
+        # else:
+        #     return {"connected": False, "message": f"Database type {db_config['type']} not supported for test_db endpoint"}
 
     except Exception as e:
         print(f"Database connection failed: {e}")
@@ -481,11 +491,11 @@ def get_logs_html():
 
     try:
         print("Getting database config...")
-        # Simplified version - just return basic stats without complex DB queries
         db_config = get_db_config()
         print(f"Database type: {db_config['type']}")
 
-        # Simple count query only (much lighter)
+        # Get logs data and count
+        logs = []
         total_count = 0
         try:
             print("Attempting database connection...")
@@ -504,23 +514,37 @@ def get_logs_html():
                     )
                 print("Database connected successfully")
                 with connection.cursor() as cursor:
+                    # Get total count
                     print("Executing COUNT query...")
                     cursor.execute("SELECT COUNT(*) FROM api_logs")
-                    result = cursor.fetchone()
-                    total_count = result[0] if result else 0
-                    print(f"Query result: {total_count}")
+                    count_result = cursor.fetchone()
+                    total_count = count_result[0] if count_result else 0
+                    print(f"Total count: {total_count}")
+
+                    # Get last 50 logs
+                    print("Fetching last 50 logs...")
+                    cursor.execute("""
+                        SELECT created_at, client_ip, user_id, endpoint, request_json, response_json, status_code
+                        FROM api_logs
+                        ORDER BY created_at DESC
+                        LIMIT 50
+                    """)
+                    logs = cursor.fetchall()
+                    print(f"Fetched {len(logs)} logs")
+
                 connection.close()
                 print("Database connection closed")
         except Exception as e:
-            print(f"DB count error: {e}")
+            print(f"DB error: {e}")
             import traceback
             traceback.print_exc()
             total_count = f"Error: {str(e)}"
+            logs = []
 
         html_content = f"""
         <html>
         <head>
-            <title>JoAI API Request Logs (QuestDB)</title>
+            <title>JoAI API Request Logs ({db_config["type"].upper()})</title>
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 20px; }}
                 .log-entry {{ border: 1px solid #ccc; margin: 10px 0; padding: 10px; border-radius: 5px; }}
@@ -542,7 +566,7 @@ def get_logs_html():
             <div class="stats">
                 <strong>Total Requests Logged:</strong> {total_count}
                 <br>
-                <strong>Showing Last 50:</strong> {min(50, len(logs))} entries
+                <strong>Showing Last 50:</strong> {len(logs)} entries
                 <br>
                 <em>Source: {db_config["type"].upper()} Database</em>
             </div>
