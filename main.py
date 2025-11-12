@@ -216,7 +216,7 @@ def test_database_connection():
         #if db_config["type"] == "postgresql":
             # Use hardcoded DATABASE_URL as requested
         #database_url = "postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a.oregon-postgres.render.com/joai_db"
-        connection = psycopg2.connect("postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a/joai_db")
+        connection = psycopg2.connect("postgresql://joai_user1:1Rim6AMqEOb0ZlApcFh8Ujrwt0ximlWN@dpg-d4acsls9c44c73e79or0-a.oregon-postgres.render.com/joai_db1")
         #connection = psycopg2.connect(database_url)
 
         # with connection.cursor() as cursor:
