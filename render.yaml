@@ -2,9 +2,6 @@ databases:
   - name: joai_db1
     databaseName: joai_db1
     user: joai_user1
-    password: 1Rim6AMqEOb0ZlApcFh8Ujrwt0ximlWN
-    port: 5432
-    host: dpg-d4acsls9c44c73e79or0-a
     plan: free # Free tier: 1 GB storage, expires after 90 days
     ipAllowList: [] # Allow connections from any IP
 
@@ -19,9 +16,13 @@ services:
         value: postgresql
       - key: DATABASE_URL
         fromDatabase:
-          name: joai-db
+          name: joai-db1
+          property: connectionString
+      - key: DB_URI_INTERNAL
+        fromDatabase:
+          name: joai-db1
           property: connectionString
   - type: pserv
-    name: joai-db
+    name: joai-db1
     runtime: postgresql
     ipAllowList: []  # Only accessible by other services in this project
