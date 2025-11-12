@@ -216,26 +216,26 @@ def test_database_connection():
         #if db_config["type"] == "postgresql":
             # Use hardcoded DATABASE_URL as requested
         database_url = "postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a/joai_db"
-        #print(f"Using hardcoded DATABASE_URL: {database_url[:50]}...")
         connection = psycopg2.connect(database_url)
 
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1 as test")
-            test_result = cursor.fetchone()
-            print(f"Query result: {test_result}")
+        # with connection.cursor() as cursor:
+        #     cursor.execute("SELECT 1 as test")
+        #     test_result = cursor.fetchone()
+        #     print(f"Query result: {test_result}")
 
-            # Get first record from api_logs table
-            cursor.execute("SELECT * FROM CRYPTO_CANDLES ORDER BY TIMESTAMP DESC LIMIT 1")
-            first_log = cursor.fetchone()
-            print(f"First log record: {first_log}")
+        #     # Get first record from api_logs table
+        #     cursor.execute("SELECT * FROM CRYPTO_CANDLES ORDER BY TIMESTAMP DESC LIMIT 1")
+        #     first_log = cursor.fetchone()
+        #     print(f"First log record: {first_log}")
 
         connection.close()
         print("Database connection successful!")
         return {
             "connected": True,
-            "message": "Database connection successful",
-            "test_result": test_result,
-            "first_log": first_log
+            "message": "Database connection successful"
+            # ,
+            # "test_result": test_result,
+            # "first_log": first_log
         }
         # else:
         #     return {"connected": False, "message": f"Database type {db_config['type']} not supported for test_db endpoint"}
