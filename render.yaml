@@ -3,7 +3,7 @@ databases:
     databaseName: joai_db1
     user: joai_user1
     plan: free # Free tier: 1 GB storage, expires after 90 days
-    #ipAllowList: [] # Allow connections from any IP
+    ipAllowList: [] # Allow connections from any IP
 
 services:
   - type: web
@@ -22,7 +22,3 @@ services:
         fromDatabase:
           name: joai-db1
           property: connectionString
-  - type: pserv
-    name: joai-db1
-    runtime: postgresql
-    ipAllowList: []  # Only accessible by other services in this project
