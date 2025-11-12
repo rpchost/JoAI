@@ -18,7 +18,3 @@ services:
         fromDatabase:
           name: joai-db1
           property: connectionString
-      - key: DB_URI_INTERNAL
-        fromDatabase:
-          name: joai-db1
-          property: connectionString
