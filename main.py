@@ -211,21 +211,13 @@ def test_database_connection():
     """Test PostgreSQL database connection"""
     try:
         print("Testing database connection...")
-        db_config = get_db_config()
+        #db_config = get_db_config()
 
         #if db_config["type"] == "postgresql":
-            # if "connection_string" in db_config:
-            #     print(f"Using DATABASE_URL: {db_config['connection_string'][:50]}...")
-            #     connection = psycopg2.connect(db_config["connection_string"])
-            # else:
-        print("Using individual credentials from .env")
-        connection = psycopg2.connect(
-            host=db_config["host"],
-            user=db_config["user"],
-            password=db_config["password"],
-            database=db_config["database"],
-            port=db_config["port"]
-        )
+            # Use hardcoded DATABASE_URL as requested
+        database_url = "postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a/joai_db"
+        #print(f"Using hardcoded DATABASE_URL: {database_url[:50]}...")
+        connection = psycopg2.connect(database_url)
 
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1 as test")
