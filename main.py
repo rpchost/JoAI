@@ -898,3 +898,63 @@ def test_binance_connection():
             "success": False,
             "message": f"Failed to connect to Binance: {str(e)}"
         }
+    
+@app.get("/test_coingecko")
+def test_coingecko_and_populate():
+    """Test CoinGecko API and populate database with BTC data"""
+    try:
+        logger.info("=== Testing CoinGecko API ===")
+        
+        # Import the function
+        from fetch_data import fetch_and_store_candles
+        
+        # Test with BTC/USDT
+        logger.info("Fetching and storing BTC/USDT data...")
+        result = fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=100)
+        
+        # Verify data was stored
+        db_url = os.getenv("DATABASE_URL")
+        connection = psycopg2.connect(db_url, connect_timeout=10)
+        
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM crypto_candles WHERE symbol = 'BTCUSDT'")
+            count = cursor.fetchone()[0]
+            
+            cursor.execute("""
+                SELECT symbol, timestamp, open, high, low, close, volume 
+                FROM crypto_candles 
+                WHERE symbol = 'BTCUSDT' 
+                ORDER BY timestamp DESC 
+                LIMIT 5
+            """)
+            recent_candles = cursor.fetchall()
+        
+        connection.close()
+        
+        return {
+            "success": True,
+            "message": "CoinGecko test successful",
+            "rows_inserted": result.get("rows_inserted", 0),
+            "total_btc_candles": count,
+            "recent_sample": [
+                {
+                    "symbol": row[0],
+                    "timestamp": str(row[1]),
+                    "open": float(row[2]),
+                    "high": float(row[3]),
+                    "low": float(row[4]),
+                    "close": float(row[5]),
+                    "volume": float(row[6])
+                }
+                for row in recent_candles
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"CoinGecko test failed: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "message": f"CoinGecko test failed: {str(e)}"
+        }
