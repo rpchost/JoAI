@@ -209,34 +209,58 @@ def test_endpoint():
 
 @app.get("/test_db")
 def test_database_connection():
-    """Test PostgreSQL database connection"""
+    """Test PostgreSQL database connection with detailed logging"""
     try:
-        # Get from environment variable
-        db_url = os.getenv("DATABASE_URL")  # Set this in Render dashboard
+        logger.info("=== Starting database connection test ===")
         
-        print(f"Testing database connection to: {db_url[:20]}...")
+        # Check if DATABASE_URL exists
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            logger.error("DATABASE_URL environment variable not found!")
+            return {
+                "connected": False,
+                "message": "DATABASE_URL not configured",
+                "env_vars": list(os.environ.keys())  # List available env vars
+            }
+        
+        logger.info(f"DATABASE_URL found (first 30 chars): {db_url[:30]}...")
+        logger.info("Attempting to connect...")
         
         connection = psycopg2.connect(db_url)
+        logger.info("Connection established")
+        
         cur = connection.cursor()
-        cur.execute("SELECT version()")
-        db_version = cur.fetchone()
+        logger.info("Cursor created")
+        
+        cur.execute("SELECT version(), current_database()")
+        result = cur.fetchone()
+        logger.info(f"Query executed successfully: {result}")
+        
         cur.close()
         connection.close()
+        logger.info("Connection closed")
        
-        print("Database connection successful!")
         return {
             "connected": True,
             "message": "Database connection successful",
-            "db_version": db_version[0] if db_version else None
+            "db_version": result[0][:50] if result else None,
+            "database": result[1] if result and len(result) > 1 else None
         }
-    except Exception as e:
-        print(f"Database connection failed: {str(e)}")
+        
+    except psycopg2.OperationalError as e:
+        logger.error(f"PostgreSQL Operational Error: {str(e)}")
         return {
             "connected": False,
-            "message": f"Connection failed: {str(e)}"
+            "error_type": "OperationalError",
+            "message": str(e)
         }
-
-# Remove NLP processor initialization - not needed anymore
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        return {
+            "connected": False,
+            "error_type": type(e).__name__,
+            "message": str(e)
+        }
 
 @app.post("/nlp_predict")
 def nlp_predict_endpoint(request: NLPRequest, req: Request):
