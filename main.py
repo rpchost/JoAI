@@ -699,28 +699,27 @@ def clear_logs():
 def init_database():
     """Initialize database: check/create tables and populate crypto data"""
     try:
-        db_config = get_db_config()
-
-        if db_config["type"] != "postgresql":
+        logger.info("=== Starting database initialization ===")
+        
+        # Check if DATABASE_URL exists
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            logger.error("DATABASE_URL environment variable not found!")
             return {
                 "success": False,
-                "message": f"Database initialization only supported for PostgreSQL. Current type: {db_config['type']}"
+                "message": "DATABASE_URL not configured",
+                "env_vars": list(os.environ.keys())
             }
-
+        
+        logger.info(f"DATABASE_URL found (first 30 chars): {db_url[:30]}...")
+        
         # Import required functions
         from fetch_data import populate_multiple_symbols
 
-        # Connect to database
-        if "connection_string" in db_config:
-            connection = psycopg2.connect(db_config["connection_string"])
-        else:
-            connection = psycopg2.connect(
-                host=db_config["host"],
-                user=db_config["user"],
-                password=db_config["password"],
-                database=db_config["database"],
-                port=db_config["port"]
-            )
+        # Connect to database with timeout
+        logger.info("Attempting to connect to database...")
+        connection = psycopg2.connect(db_url, connect_timeout=10)
+        logger.info("Connection established successfully")
 
         results = {
             "api_logs": {"status": "unknown", "action": "none"},
@@ -730,6 +729,7 @@ def init_database():
         try:
             with connection.cursor() as cursor:
                 # Check and create api_logs table
+                logger.info("Checking api_logs table...")
                 cursor.execute("""
                     SELECT EXISTS (
                         SELECT 1 FROM information_schema.tables
@@ -740,6 +740,7 @@ def init_database():
 
                 if not api_logs_exists:
                     # Create api_logs table
+                    logger.info("Creating api_logs table...")
                     create_api_logs_table = """
                     CREATE TABLE api_logs (
                         id SERIAL PRIMARY KEY,
@@ -759,7 +760,7 @@ def init_database():
                     """
                     cursor.execute(create_api_logs_table)
                     results["api_logs"] = {"status": "created", "action": "created table with indexes"}
-                    print("api_logs table created successfully")
+                    logger.info("api_logs table created successfully")
                 else:
                     # Check if table has required columns
                     cursor.execute("""
@@ -772,11 +773,13 @@ def init_database():
 
                     if all(col in columns for col in required_columns):
                         results["api_logs"] = {"status": "exists", "action": "table exists with required fields"}
+                        logger.info("api_logs table already exists with all required fields")
                     else:
                         results["api_logs"] = {"status": "incomplete", "action": "table exists but missing some fields"}
-                        print(f"api_logs table exists but missing columns. Has: {columns}")
+                        logger.warning(f"api_logs table exists but missing columns. Has: {columns}")
 
                 # Check and create/populate crypto_candles table
+                logger.info("Checking crypto_candles table...")
                 cursor.execute("""
                     SELECT EXISTS (
                         SELECT 1 FROM information_schema.tables
@@ -787,6 +790,7 @@ def init_database():
 
                 if not crypto_candles_exists:
                     # Create crypto_candles table
+                    logger.info("Creating crypto_candles table...")
                     create_crypto_candles_table = """
                     CREATE TABLE crypto_candles (
                         id SERIAL PRIMARY KEY,
@@ -806,7 +810,7 @@ def init_database():
                     """
                     cursor.execute(create_crypto_candles_table)
                     results["crypto_candles"] = {"status": "created", "action": "created table with indexes"}
-                    print("crypto_candles table created successfully")
+                    logger.info("crypto_candles table created successfully")
                     populate_data = True
                 else:
                     # Check if table has data
@@ -815,28 +819,30 @@ def init_database():
 
                     if data_count == 0:
                         results["crypto_candles"] = {"status": "empty", "action": "table exists but no data"}
-                        print(f"crypto_candles table exists but is empty (0 records)")
+                        logger.info(f"crypto_candles table exists but is empty (0 records)")
                         populate_data = True
                     else:
                         results["crypto_candles"] = {"status": "populated", "action": f"table exists with {data_count} records"}
-                        print(f"crypto_candles table exists with {data_count} records")
+                        logger.info(f"crypto_candles table exists with {data_count} records")
                         populate_data = False
 
             connection.commit()
+            logger.info("Database changes committed")
 
             # Populate crypto data if needed
             if populate_data:
-                print("Starting data population...")
+                logger.info("Starting data population...")
                 try:
                     populate_multiple_symbols()
                     results["crypto_candles"]["action"] += " - data populated"
-                    print("Data population completed successfully")
+                    logger.info("Data population completed successfully")
                 except Exception as e:
                     results["crypto_candles"]["action"] += f" - data population failed: {str(e)}"
-                    print(f"Data population failed: {str(e)}")
+                    logger.error(f"Data population failed: {str(e)}")
 
         finally:
             connection.close()
+            logger.info("Database connection closed")
 
         return {
             "success": True,
@@ -844,16 +850,18 @@ def init_database():
             "results": results
         }
 
+    except psycopg2.OperationalError as e:
+        logger.error(f"PostgreSQL Operational Error: {str(e)}")
+        return {
+            "success": False,
+            "error_type": "OperationalError",
+            "message": str(e)
+        }
     except Exception as e:
-        print(f"Database initialization error: {e}")
+        logger.error(f"Database initialization error: {str(e)}", exc_info=True)
         import traceback
         traceback.print_exc()
         return {
             "success": False,
             "message": f"Database initialization failed: {str(e)}"
         }
-
-# if __name__ == "__main__":
-#     import uvicorn
-#     port = int(os.getenv("APP_PORT", 8081))
-#     uvicorn.run(app, host="0.0.0.0", port=port)
