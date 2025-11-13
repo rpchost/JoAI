@@ -206,51 +206,35 @@ def home():
 def test_endpoint():
     """Simple test endpoint that returns a static string"""
     return "Hello from JoAI! Server is running successfully."
+
 @app.get("/test_db")
 def test_database_connection():
     """Test PostgreSQL database connection"""
     try:
-        print("Testing database connection...")
-        #db_config = get_db_config()
-
-        #if db_config["type"] == "postgresql":
-            # Use hardcoded DATABASE_URL as requested
-        #database_url = "postgresql://joai_user:xYl0e8Tlmz7ElkXu7w2H7m0jzIAducm8@dpg-d47pj5chg0os73frtvsg-a.oregon-postgres.render.com/joai_db"
-        #connection = psycopg2.connect("postgresql://joai_user1:1Rim6AMqEOb0ZlApcFh8Ujrwt0ximlWN@dpg-d4acsls9c44c73e79or0-a.oregon-postgres.render.com/joai_db1")
-        connection = psycopg2.connect("postgresql://joai_user1:1Rim6AMqEOb0ZlApcFh8Ujrwt0ximlWN@dpg-d4acsls9c44c73e79or0-a/joai_db1")
-        cur=connection.cursor()
-        cur.execute("SELECT 1 as test")
-        cur.close
+        # Get from environment variable
+        db_url = os.getenv("DATABASE_URL")  # Set this in Render dashboard
+        
+        print(f"Testing database connection to: {db_url[:20]}...")
+        
+        connection = psycopg2.connect(db_url)
+        cur = connection.cursor()
+        cur.execute("SELECT version()")
+        db_version = cur.fetchone()
+        cur.close()
         connection.close()
-        #connection = psycopg2.connect(database_url)
-
-        # with connection.cursor() as cursor:
-        #     cursor.execute("SELECT 1 as test")
-        #     test_result = cursor.fetchone()
-        #     print(f"Query result: {test_result}")
-
-        #     # Get first record from api_logs table
-        #     cursor.execute("SELECT * FROM CRYPTO_CANDLES ORDER BY TIMESTAMP DESC LIMIT 1")
-        #     first_log = cursor.fetchone()
-        #     print(f"First log record: {first_log}")
-
-        connection.close()
+       
         print("Database connection successful!")
         return {
             "connected": True,
-            "message": "Database connection successful"
-            # ,
-            # "test_result": test_result,
-            # "first_log": first_log
+            "message": "Database connection successful",
+            "db_version": db_version[0] if db_version else None
         }
-        # else:
-        #     return {"connected": False, "message": f"Database type {db_config['type']} not supported for test_db endpoint"}
-
     except Exception as e:
-        print(f"Database connection failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"connected": False, "message": f"Database connection failed: {str(e)}"}
+        print(f"Database connection failed: {str(e)}")
+        return {
+            "connected": False,
+            "message": f"Connection failed: {str(e)}"
+        }
 
 # Remove NLP processor initialization - not needed anymore
 
