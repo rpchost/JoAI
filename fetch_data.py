@@ -146,14 +146,15 @@ def store_candles_postgresql(df, db_config):
         import psycopg2
 
         if "connection_string" in db_config:
-            connection = psycopg2.connect(db_config["connection_string"])
+            connection = psycopg2.connect(db_config["connection_string"], connect_timeout=10)
         else:
             connection = psycopg2.connect(
                 host=db_config["host"],
                 user=db_config["user"],
                 password=db_config["password"],
                 database=db_config["database"],
-                port=db_config["port"]
+                port=db_config["port"],
+                connect_timeout=10
             )
 
         try:
@@ -193,7 +194,7 @@ def store_candles_postgresql(df, db_config):
     except Exception as e:
         print(f"Error storing data in PostgreSQL: {str(e)}")
         raise
-
+    
 def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
     """Main function to fetch from Binance and store in configured database"""
     try:
