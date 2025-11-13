@@ -4,8 +4,8 @@ from pydantic import BaseModel
 import requests
 import pandas as pd
 import numpy as np
-from models.lstm_model import predict_next_candle
-from nlp_parser import CryptoPredictionNLP
+#from models.lstm_model import predict_next_candle
+#from nlp_parser import CryptoPredictionNLP
 from datetime import datetime
 from typing import List, Dict
 import json
