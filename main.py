@@ -226,7 +226,7 @@ def test_database_connection():
         logger.info(f"DATABASE_URL found (first 30 chars): {db_url[:30]}...")
         logger.info("Attempting to connect...")
         
-        connection = psycopg2.connect(db_url)
+        connection = psycopg2.connect(db_url, connect_timeout=10)
         logger.info("Connection established")
         
         cur = connection.cursor()
@@ -849,7 +849,7 @@ def init_database():
             "message": f"Database initialization failed: {str(e)}"
         }
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("APP_PORT", 8081))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+# if __name__ == "__main__":
+#     import uvicorn
+#     port = int(os.getenv("APP_PORT", 8081))
+#     uvicorn.run(app, host="0.0.0.0", port=port)
