@@ -46,22 +46,38 @@ def get_db_config():
 
 def fetch_candles_from_binance(symbol="BTC/USDT", timeframe="1h", limit=1000):
     """Fetch OHLCV data from Binance"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
-        print(f"Fetching {limit} candles for {symbol} from Binance...")
-        exchange = ccxt.binance()
+        logger.info(f"Initializing Binance exchange...")
+        exchange = ccxt.binance({
+            'enableRateLimit': True,
+            'timeout': 30000,  # 30 seconds timeout
+        })
+        
+        logger.info(f"Fetching {limit} candles for {symbol} from Binance...")
         since = int((datetime.now() - timedelta(hours=limit)).timestamp() * 1000)
+        
+        logger.info(f"Making API call to Binance (since: {datetime.fromtimestamp(since/1000)})")
         candles = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
+        
+        logger.info(f"Received {len(candles)} candles from Binance")
 
         df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
         df["symbol"] = symbol.replace("/", "")  # e.g., BTCUSDT
 
-        print(f"Fetched {len(df)} candles for {symbol}")
+        logger.info(f"✅ Successfully fetched {len(df)} candles for {symbol}")
+        logger.info(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
         return df
+        
     except Exception as e:
-        print(f"Error fetching data from Binance: {str(e)}")
+        logger.error(f"❌ Error fetching data from Binance for {symbol}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise
-
+    
 def store_candles_mysql(df, db_config):
     """Store candles in MySQL database"""
     try:
@@ -194,7 +210,7 @@ def store_candles_postgresql(df, db_config):
     except Exception as e:
         print(f"Error storing data in PostgreSQL: {str(e)}")
         raise
-    
+
 def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
     """Main function to fetch from Binance and store in configured database"""
     try:
@@ -223,6 +239,10 @@ def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
 
 def populate_multiple_symbols():
     """Populate database with data for multiple cryptocurrency symbols"""
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
     symbols = [
         "BTC/USDT",
         "ETH/USDT",
@@ -231,13 +251,37 @@ def populate_multiple_symbols():
         "SOL/USDT"
     ]
 
+    success_count = 0
+    failed_symbols = []
+
     for symbol in symbols:
         try:
-            print(f"\n--- Processing {symbol} ---")
+            logger.info(f"\n{'='*50}")
+            logger.info(f"Processing {symbol}")
+            logger.info(f"{'='*50}")
+            
             fetch_and_store_candles(symbol=symbol, timeframe="1h", limit=2000)
+            success_count += 1
+            logger.info(f"✅ Successfully processed {symbol}")
+            
         except Exception as e:
-            print(f"Failed to process {symbol}: {e}")
+            logger.error(f"❌ Failed to process {symbol}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            failed_symbols.append(symbol)
             continue
+
+    logger.info(f"\n{'='*50}")
+    logger.info(f"SUMMARY: {success_count}/{len(symbols)} symbols processed successfully")
+    if failed_symbols:
+        logger.error(f"Failed symbols: {', '.join(failed_symbols)}")
+    logger.info(f"{'='*50}")
+    
+    return {
+        "success_count": success_count,
+        "total_symbols": len(symbols),
+        "failed_symbols": failed_symbols
+    }
 
 if __name__ == "__main__":
     import sys

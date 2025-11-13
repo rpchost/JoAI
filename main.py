@@ -865,3 +865,36 @@ def init_database():
             "success": False,
             "message": f"Database initialization failed: {str(e)}"
         }
+    
+@app.get("/test_binance")
+def test_binance_connection():
+    """Test if we can connect to Binance API"""
+    try:
+        import ccxt
+        logger.info("Initializing Binance exchange...")
+        
+        exchange = ccxt.binance({
+            'enableRateLimit': True,
+            'timeout': 30000,
+        })
+        
+        logger.info("Fetching BTC/USDT ticker...")
+        ticker = exchange.fetch_ticker('BTC/USDT')
+        
+        logger.info(f"Successfully fetched ticker: {ticker['last']}")
+        
+        return {
+            "success": True,
+            "message": "Successfully connected to Binance",
+            "btc_price": ticker['last'],
+            "timestamp": ticker['timestamp']
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to connect to Binance: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "message": f"Failed to connect to Binance: {str(e)}"
+        }
