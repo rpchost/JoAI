@@ -211,22 +211,35 @@ def store_candles_postgresql(df, db_config):
     """Store candles in PostgreSQL database"""
     try:
         import psycopg2
-
+        
+        # Add SSL mode for external connections
         if "connection_string" in db_config:
-            connection = psycopg2.connect(db_config["connection_string"], connect_timeout=10)
+            # Add sslmode=require for external Render connections
+            connection_string = db_config["connection_string"]
+            if "sslmode=" not in connection_string:
+                connection_string += "?sslmode=require"
+            
+            print(f"Connecting to PostgreSQL (external)...")
+            connection = psycopg2.connect(connection_string, connect_timeout=10)
         else:
+            print(f"Connecting to PostgreSQL (parameters)...")
             connection = psycopg2.connect(
                 host=db_config["host"],
                 user=db_config["user"],
                 password=db_config["password"],
                 database=db_config["database"],
                 port=db_config["port"],
-                connect_timeout=10
+                connect_timeout=10,
+                sslmode='require'  # Add SSL mode
             )
+
+        print(f"✅ Connected to PostgreSQL successfully")
 
         try:
             with connection.cursor() as cursor:
-                # Insert data with ON CONFLICT DO UPDATE (PostgreSQL equivalent of INSERT ... ON DUPLICATE KEY UPDATE)
+                print(f"Inserting {len(df)} candles...")
+                
+                # Insert data with ON CONFLICT DO UPDATE
                 sql = """
                 INSERT INTO crypto_candles (symbol, timestamp, open, high, low, close, volume)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -251,53 +264,34 @@ def store_candles_postgresql(df, db_config):
                         float(row['volume'])
                     ))
                     inserted_count += 1
+                    
+                    # Progress indicator every 100 rows
+                    if inserted_count % 100 == 0:
+                        print(f"  Inserted {inserted_count}/{len(df)} rows...")
 
                 connection.commit()
-                print(f"Stored {inserted_count} candles in PostgreSQL database")
+                print(f"✅ Stored {inserted_count} candles in PostgreSQL database")
 
         finally:
             connection.close()
+            print(f"Database connection closed")
 
     except Exception as e:
-        print(f"Error storing data in PostgreSQL: {str(e)}")
+        print(f"❌ Error storing data in PostgreSQL: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise
+    
 #uses binance
-# def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
-#     """Main function to fetch from Binance and store in configured database"""
-#     try:
-#         # Get database configuration
-#         db_config = get_db_config()
-#         print(f"Using database: {db_config['type']}")
-
-#         # Fetch data from Binance
-#         df = fetch_candles_from_binance(symbol, timeframe, limit)
-
-#         # Store based on database type
-#         if db_config["type"] == "mysql":
-#             store_candles_mysql(df, db_config)
-#         elif db_config["type"] == "postgresql":
-#             store_candles_postgresql(df, db_config)
-#         elif db_config["type"] == "questdb":
-#             store_candles_questdb(df, db_config)
-#         else:
-#             raise ValueError(f"Unsupported database type: {db_config['type']}")
-
-#         print(f"Successfully stored {len(df)} candles for {symbol}")
-
-#     except Exception as e:
-#         print(f"Error in fetch_and_store_candles: {str(e)}")
-#         raise
-
-#uses CoinGecko
 def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
-    """Main function to fetch from CoinGecko and store in configured database"""
+    """Main function to fetch from Binance and store in configured database"""
     try:
         # Get database configuration
         db_config = get_db_config()
         print(f"Using database: {db_config['type']}")
 
-        # Fetch data from CoinGecko instead of Binance
-        df = fetch_candles_from_coingecko(symbol, timeframe, limit)
+        # Fetch data from Binance
+        df = fetch_candles_from_binance(symbol, timeframe, limit)
 
         # Store based on database type
         if db_config["type"] == "mysql":
@@ -310,12 +304,39 @@ def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
             raise ValueError(f"Unsupported database type: {db_config['type']}")
 
         print(f"Successfully stored {len(df)} candles for {symbol}")
-        return {"success": True, "rows_inserted": len(df), "symbol": symbol}
 
     except Exception as e:
         print(f"Error in fetch_and_store_candles: {str(e)}")
         raise
-    
+
+#uses CoinGecko
+# def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
+#     """Main function to fetch from CoinGecko and store in configured database"""
+#     try:
+#         # Get database configuration
+#         db_config = get_db_config()
+#         print(f"Using database: {db_config['type']}")
+
+#         # Fetch data from CoinGecko instead of Binance
+#         df = fetch_candles_from_coingecko(symbol, timeframe, limit)
+
+#         # Store based on database type
+#         if db_config["type"] == "mysql":
+#             store_candles_mysql(df, db_config)
+#         elif db_config["type"] == "postgresql":
+#             store_candles_postgresql(df, db_config)
+#         elif db_config["type"] == "questdb":
+#             store_candles_questdb(df, db_config)
+#         else:
+#             raise ValueError(f"Unsupported database type: {db_config['type']}")
+
+#         print(f"Successfully stored {len(df)} candles for {symbol}")
+#         return {"success": True, "rows_inserted": len(df), "symbol": symbol}
+
+#     except Exception as e:
+#         print(f"Error in fetch_and_store_candles: {str(e)}")
+#         raise
+
 def populate_multiple_symbols():
     """Populate database with data for multiple cryptocurrency symbols"""
     import logging
