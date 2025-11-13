@@ -315,6 +315,10 @@ def predict_candle(request: PredictRequest, req: Request):
 
     try:
         # Use LSTM model for real predictions
+        # Lazy load - only import when needed
+        print("Loading LSTM model...")
+        from models.lstm_model import predict_next_candle
+
         print("Attempting LSTM prediction...")
         prediction = predict_next_candle(request.symbol)
         print(f"LSTM prediction successful: {prediction}")
