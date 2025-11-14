@@ -309,34 +309,6 @@ def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
         print(f"Error in fetch_and_store_candles: {str(e)}")
         raise
 
-#uses CoinGecko
-# def fetch_and_store_candles(symbol="BTC/USDT", timeframe="1h", limit=1000):
-#     """Main function to fetch from CoinGecko and store in configured database"""
-#     try:
-#         # Get database configuration
-#         db_config = get_db_config()
-#         print(f"Using database: {db_config['type']}")
-
-#         # Fetch data from CoinGecko instead of Binance
-#         df = fetch_candles_from_coingecko(symbol, timeframe, limit)
-
-#         # Store based on database type
-#         if db_config["type"] == "mysql":
-#             store_candles_mysql(df, db_config)
-#         elif db_config["type"] == "postgresql":
-#             store_candles_postgresql(df, db_config)
-#         elif db_config["type"] == "questdb":
-#             store_candles_questdb(df, db_config)
-#         else:
-#             raise ValueError(f"Unsupported database type: {db_config['type']}")
-
-#         print(f"Successfully stored {len(df)} candles for {symbol}")
-#         return {"success": True, "rows_inserted": len(df), "symbol": symbol}
-
-#     except Exception as e:
-#         print(f"Error in fetch_and_store_candles: {str(e)}")
-#         raise
-
 def populate_multiple_symbols():
     """Populate database with data for multiple cryptocurrency symbols"""
     import logging
