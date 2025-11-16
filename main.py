@@ -696,11 +696,12 @@ def clear_logs():
     return {"message": "All logs cleared"}
 
 @app.get("/readjoAiApiLogs")
-def read_joai_api_logs(limit: int = 20):
-    """Read all rows from api_logs table, ordered by created_at DESC, paginated by limit (default 20)"""
+def read_joai_api_logs(page: int = 1, limit: int = 20):
+    """Read rows from api_logs table, ordered by created_at DESC, paginated by page and limit (default page 1, limit 20)"""
     try:
         db_config = get_db_config()
         logs = []
+        offset = (page - 1) * limit
 
         if db_config["type"] == "postgresql":
             if "connection_string" in db_config:
@@ -714,7 +715,7 @@ def read_joai_api_logs(limit: int = 20):
                     password=db_config["password"]
                 )
             with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM api_logs ORDER BY created_at DESC LIMIT %s", (limit,))
+                cursor.execute("SELECT * FROM api_logs ORDER BY created_at DESC LIMIT %s OFFSET %s", (limit, offset))
                 rows = cursor.fetchall()
                 column_names = [desc[0] for desc in cursor.description]
                 logs = [dict(zip(column_names, row)) for row in rows]
@@ -732,12 +733,12 @@ def read_joai_api_logs(limit: int = 20):
                 cursorclass=pymysql.cursors.DictCursor
             )
             with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM api_logs ORDER BY created_at DESC LIMIT %s", (limit,))
+                cursor.execute("SELECT * FROM api_logs ORDER BY created_at DESC LIMIT %s OFFSET %s", (limit, offset))
                 logs = cursor.fetchall()
             connection.close()
 
         elif db_config["type"] == "questdb":
-            query = f"SELECT * FROM api_logs ORDER BY created_at DESC LIMIT {limit}"
+            query = f"SELECT * FROM api_logs ORDER BY created_at DESC LIMIT {limit} OFFSET {offset}"
             response = requests.get(f"{db_config['url']}/exec", params={'query': query})
             if response.status_code == 200 and 'dataset' in response.json():
                 data = response.json()['dataset']
