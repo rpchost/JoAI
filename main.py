@@ -695,6 +695,65 @@ def clear_logs():
     request_logs.clear()
     return {"message": "All logs cleared"}
 
+@app.get("/readjoAiApiLogs")
+def read_joai_api_logs(limit: int = 20):
+    """Read all rows from api_logs table, ordered by created_at DESC, paginated by limit (default 20)"""
+    try:
+        db_config = get_db_config()
+        logs = []
+
+        if db_config["type"] == "postgresql":
+            if "connection_string" in db_config:
+                connection = psycopg2.connect(db_config["connection_string"])
+            else:
+                connection = psycopg2.connect(
+                    host=db_config["host"],
+                    port=db_config["port"],
+                    database=db_config["database"],
+                    user=db_config["user"],
+                    password=db_config["password"]
+                )
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM api_logs ORDER BY created_at DESC LIMIT %s", (limit,))
+                rows = cursor.fetchall()
+                column_names = [desc[0] for desc in cursor.description]
+                logs = [dict(zip(column_names, row)) for row in rows]
+            connection.close()
+
+        elif db_config["type"] == "mysql":
+            import pymysql
+            connection = pymysql.connect(
+                host=db_config["host"],
+                port=db_config["port"],
+                database=db_config["database"],
+                user=db_config["user"],
+                password=db_config["password"],
+                charset=db_config["charset"],
+                cursorclass=pymysql.cursors.DictCursor
+            )
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM api_logs ORDER BY created_at DESC LIMIT %s", (limit,))
+                logs = cursor.fetchall()
+            connection.close()
+
+        elif db_config["type"] == "questdb":
+            query = f"SELECT * FROM api_logs ORDER BY created_at DESC LIMIT {limit}"
+            response = requests.get(f"{db_config['url']}/exec", params={'query': query})
+            if response.status_code == 200 and 'dataset' in response.json():
+                data = response.json()['dataset']
+                columns = response.json().get('columns', [])
+                logs = [dict(zip(columns, row)) for row in data]
+            else:
+                raise Exception("Failed to query QuestDB")
+
+        else:
+            raise HTTPException(status_code=500, detail=f"Unsupported database type: {db_config['type']}")
+
+        return {"logs": logs}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/init_db")
 def init_database():
     """Initialize database: check/create tables and populate crypto data"""
