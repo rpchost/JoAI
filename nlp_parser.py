@@ -4,6 +4,7 @@ from typing import Dict, Optional, List
 from datetime import datetime
 from models.lstm_model import predict_next_candle
 
+
 class JoAIConversationNLP:
     """
     Human-like conversational AI for crypto predictions
