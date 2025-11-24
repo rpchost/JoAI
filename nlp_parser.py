@@ -4,14 +4,8 @@ from typing import Dict, Optional, List
 from datetime import datetime
 from models.lstm_model import predict_next_candle
 
-class JoAIConversationNLP:
-    """
-    Human-like conversational AI for crypto predictions
-    Handles greetings, small talk, context, predictions, and technical analysis
-    """
-
-        # 1. DYNAMIC COIN LIST (add this near the top)
-    COINS_READABLE = {
+  # 1. DYNAMIC COIN LIST (add this near the top)
+COINS_READABLE = {
         'BTCUSDT': 'Bitcoin (BTC)', 'ETHUSDT': 'Ethereum (ETH)', 'BNBUSDT': 'BNB',
         'ADAUSDT': 'Cardano (ADA)', 'SOLUSDT': 'Solana (SOL)', 'XRPUSDT': 'XRP',
         'DOGEUSDT': 'Dogecoin (DOGE)', 'SHIBUSDT': 'Shiba Inu (SHIB)',
@@ -19,9 +13,15 @@ class JoAIConversationNLP:
         'AVAXUSDT': 'Avalanche (AVAX)', 'TONUSDT': 'Toncoin (TON)'
     }
 
-    ALL_COINS_STR = " • ".join([name.split('(')[0].strip() for name in COINS_READABLE.values()])
-    ALL_COINS_EMOJI = "BTC • ETH • SOL • XRP • DOGE • SHIB • PEPE • LINK • AVAX • TON • ADA • BNB"
+ALL_COINS_STR = " • ".join([name.split('(')[0].strip() for name in COINS_READABLE.values()])
+ALL_COINS_EMOJI = "BTC • ETH • SOL • XRP • DOGE • SHIB • PEPE • LINK • AVAX • TON • ADA • BNB"
 
+class JoAIConversationNLP:
+    """
+    Human-like conversational AI for crypto predictions
+    Handles greetings, small talk, context, predictions, and technical analysis
+    """
+      
     def __init__(self, api_base_url: str = "http://localhost:8081"):
         self.api_base_url = api_base_url.rstrip('/')
         self.conversation_context = {
