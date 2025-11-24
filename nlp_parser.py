@@ -2,7 +2,7 @@ import re
 import random
 from typing import Dict, Optional, List
 from datetime import datetime
-from models.lstm_model_bak import predict_next_candle
+from models.lstm_model import predict_next_candle
 
   # 1. DYNAMIC COIN LIST (add this near the top)
 COINS_READABLE = {
