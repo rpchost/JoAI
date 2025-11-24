@@ -10,6 +10,18 @@ class JoAIConversationNLP:
     Handles greetings, small talk, context, predictions, and technical analysis
     """
 
+        # 1. DYNAMIC COIN LIST (add this near the top)
+    COINS_READABLE = {
+        'BTCUSDT': 'Bitcoin (BTC)', 'ETHUSDT': 'Ethereum (ETH)', 'BNBUSDT': 'BNB',
+        'ADAUSDT': 'Cardano (ADA)', 'SOLUSDT': 'Solana (SOL)', 'XRPUSDT': 'XRP',
+        'DOGEUSDT': 'Dogecoin (DOGE)', 'SHIBUSDT': 'Shiba Inu (SHIB)',
+        'PEPEUSDT': 'Pepe (PEPE)', 'LINKUSDT': 'Chainlink (LINK)',
+        'AVAXUSDT': 'Avalanche (AVAX)', 'TONUSDT': 'Toncoin (TON)'
+    }
+
+    ALL_COINS_STR = " • ".join([name.split('(')[0].strip() for name in COINS_READABLE.values()])
+    ALL_COINS_EMOJI = "BTC • ETH • SOL • XRP • DOGE • SHIB • PEPE • LINK • AVAX • TON • ADA • BNB"
+
     def __init__(self, api_base_url: str = "http://localhost:8081"):
         self.api_base_url = api_base_url.rstrip('/')
         self.conversation_context = {
@@ -27,6 +39,13 @@ class JoAIConversationNLP:
             'bnb': 'BNBUSDT', 'binance': 'BNBUSDT', 'bnbusdt': 'BNBUSDT',
             'ada': 'ADAUSDT', 'cardano': 'ADAUSDT', 'adausdt': 'ADAUSDT',
             'sol': 'SOLUSDT', 'solana': 'SOLUSDT', 'solusdt': 'SOLUSDT',
+            'xrp': 'XRPUSDT', 'ripple': 'XRPUSDT',
+            'doge': 'DOGEUSDT', 'dogecoin': 'DOGEUSDT', 'dogeusdt': 'DOGEUSDT',
+            'shib': 'SHIBUSDT', 'shiba': 'SHIBUSDT', 'shibainu': 'SHIBUSDT',
+            'pepe': 'PEPEUSDT', 'pepeusdt': 'PEPEUSDT',
+            'link': 'LINKUSDT', 'chainlink': 'LINKUSDT',
+            'avax': 'AVAXUSDT', 'avalanche': 'AVAXUSDT',
+            'ton': 'TONUSDT', 'toncoin': 'TONUSDT'
         }
         
         # Timeframe patterns
@@ -166,14 +185,13 @@ class JoAIConversationNLP:
         
         # Greeting patterns
         self.greetings = {
-            'patterns': [
-                r'\b(hi|hello|hey|greetings|good\s+(morning|afternoon|evening|day)|howdy|yo|sup|what\'s up)\b',
-            ],
+            'patterns': [r'\b(hi|hello|hey|greetings|good\s+(morning|afternoon|evening|day)|howdy|yo|sup|what\'s up)\b'],
             'responses': [
-                "Hi there! 👋 I'm JoAI, your crypto prediction assistant. How can I help you today?",
-                "Hello! 😊 I'm here to help you with crypto predictions. What would you like to know?",
-                "Hey! Great to see you! I can predict crypto prices for BTC, ETH, SOL, ADA, and BNB. What interests you?",
-                "Hi! 🚀 Ready to explore crypto predictions together? Just ask me about any cryptocurrency!",
+                f"Hey! I'm JoAI — your crypto prediction AI with 12 fully trained models ready.\n{ALL_COINS_EMOJI}\nWhat are we predicting today?",
+                f"Yo! Just finished training on 2000+ candles for each coin.\n{ALL_COINS_EMOJI}\nName your fighter.",
+                f"Sup! I now predict {len(COINS_READABLE)} coins with deep LSTM brains. DOGE? PEPE? BTC? You name it — I got it.",
+                f"Hey there! Welcome to the new JoAI — now covering:\n{ALL_COINS_EMOJI}\nWhich one should we analyze first?",
+                f"Ello! I can predict the next move for BTC, ETH, SOL, XRP, DOGE, SHIB, PEPE and 5 more. What’s cooking?"
             ]
         }
         
@@ -205,35 +223,25 @@ class JoAIConversationNLP:
         
         # Capability questions
         self.capabilities = {
-            'patterns': [
-                r'\b(what can you do|what do you do|help|capabilities|features|how does this work|how to use)\b',
-            ],
-            'responses': [
-                """I'm JoAI, your crypto prediction AI! 🤖 Here's what I can do:
+            'patterns': [r'\b(what can you do|what do you do|help|capabilities|features|how does this work|how to use)\b'],
+            'responses': [f"""Hey! I'm JoAI — the most advanced open-source crypto prediction AI in 2025.
 
-📊 **Crypto Predictions**: I use advanced LSTM neural networks to predict prices for:
-   • Bitcoin (BTC)
-   • Ethereum (ETH)
-   • Solana (SOL)
-   • Cardano (ADA)
-   • Binance Coin (BNB)
+        I predict the next candle for **{len(COINS_READABLE)} coins** using bidirectional LSTM + 22 indicators:
 
-🎯 **How to ask**:
-   • "Predict BTC for next hour"
-   • "What will SOL be in 5 minutes?"
-   • "ETH prediction"
-   • "Show me Bitcoin forecast"
+        {ALL_COINS_EMOJI}
 
-📈 **Technical Analysis**:
-   • "What indicators do you use?"
-   • "Show me technical indicators"
-   • "Explain RSI"
-   • "How accurate is your model?"
+        Just say:
+        • "predict doge"
+        • "what will pepe do?"
+        • "btc next hour"
+        • "shib pump or dump?"
 
-💡 **Just ask naturally!** I understand different ways of asking. Try it out!""",
+        I understand natural language, remember context, and give you confidence levels.
+
+        Try me — ask about any coin above!"""
             ]
         }
-        
+
         # Technical Indicator queries
         self.technical_queries = {
             'patterns': [
@@ -287,9 +295,10 @@ class JoAIConversationNLP:
         
         # Confusion/unclear
         self.confusion_responses = [
-            "Hmm, I'm not quite sure what you mean. 🤔 Could you rephrase that? Or try asking about a crypto prediction!",
-            "I didn't quite catch that. Try asking something like 'predict BTC for 1 hour' or 'what will ETH be?'",
-            "I'm a bit confused! 😅 I'm best at crypto predictions. Try asking about Bitcoin, Ethereum, Solana, Cardano, or BNB!",
+            f"Hmm, not sure what you mean. Try asking about one of these coins:\n{ALL_COINS_EMOJI}",
+            f"I didn't catch that. Want a prediction? I can do BTC, ETH, SOL, XRP, DOGE, SHIB, PEPE, LINK, AVAX, TON, ADA, BNB",
+            f"Not sure! But I can predict the next move for any of these:\n{ALL_COINS_EMOJI}\nJust name a coin!",
+            f"Lost me there! But I’m really good at predicting {ALL_COINS_STR}. Which one?",
         ]
 
     def detect_intent(self, query: str) -> str:

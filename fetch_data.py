@@ -320,7 +320,14 @@ def populate_multiple_symbols():
         "ETH/USDT",
         "BNB/USDT",
         "ADA/USDT",
-        "SOL/USDT"
+        "SOL/USDT",
+        "XRP/USDT",
+        "DOGE/USDT",
+        "SHIB/USDT",
+        "PEPE/USDT",
+        "LINK/USDT",
+        "AVAX/USDT",
+        "TON/USDT"
     ]
 
     success_count = 0
