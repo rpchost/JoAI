@@ -168,10 +168,12 @@ def predict_next_candle(symbol: str = "BTCUSDT"):
         "high": round(pred_high, 2),
         "low": round(pred_low, 2),
         "close": round(pred_close, 2),
-        "volume": volume_display,                    # ← now a clean string
-        "volume_btc": round(raw_volume_btc, 1),       # ← optional: raw BTC volume
+        "volume": volume_display,                    # ← STRING: "$73.4M" or "$892.1M"
+        "volume_raw": round(raw_volume_btc, 1),      # ← NUMBER: 857.3 (for any future math)
         "current_price": round(last_close, 2),
-        "change_pct": round((pred_close - last_close) / last_close * 100, 2)
+        "change_pct": round((pred_close - last_close) / last_close * 100, 2),
+        "symbol": symbol,
+        "confidence": "High"  # optional flair
     }
 
 

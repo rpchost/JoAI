@@ -2,7 +2,7 @@ import re
 import random
 from typing import Dict, Optional, List
 from datetime import datetime
-from models.lstm_model import predict_next_candle
+from models.lstm_model_bak import predict_next_candle
 
   # 1. DYNAMIC COIN LIST (add this near the top)
 COINS_READABLE = {
@@ -690,23 +690,43 @@ Want to know more? Ask me about any other indicator! 🚀"""
                     f"🚀 Here's what I see for **{result['symbol']}** in the next {result['timeframe']}:",
                 ]
                 
+                # return {
+                #     'success': True,
+                #     'intent': 'prediction',
+                #     'message': random.choice(messages),
+                #     'query': parsed,
+                #     'prediction': {
+                #         'symbol': result['symbol'],
+                #         'timeframe': result['timeframe'],
+                #         'open': f"${pred['open']:,.2f}",
+                #         'high': f"${pred['high']:,.2f}",
+                #         'low': f"${pred['low']:,.2f}",
+                #         'close': f"${pred['close']:,.2f}",
+                #         'volume': f"{pred['volume']:,.0f}"
+                #     },
+                #     'raw_prediction': pred,
+                #     'source': result['source']
+                # }
                 return {
-                    'success': True,
-                    'intent': 'prediction',
-                    'message': random.choice(messages),
-                    'query': parsed,
-                    'prediction': {
-                        'symbol': result['symbol'],
-                        'timeframe': result['timeframe'],
-                        'open': f"${pred['open']:,.2f}",
-                        'high': f"${pred['high']:,.2f}",
-                        'low': f"${pred['low']:,.2f}",
-                        'close': f"${pred['close']:,.2f}",
-                        'volume': f"{pred['volume']:,.0f}"
-                    },
-                    'raw_prediction': pred,
-                    'source': result['source']
-                }
+                'success': True,
+                'intent': 'prediction',
+                'message': random.choice(messages),
+                'query': parsed,
+                'prediction': {
+                    'symbol': result['symbol'],
+                    'timeframe': result['timeframe'],
+                    'open': f"${pred['open']:,.2f}",
+                    'high': f"${pred['high']:,.2f}",
+                    'low': f"${pred['low']:,.2f}",
+                    'close': f"${pred['close']:,.2f}",
+                    'volume': pred['volume'],                    # ← NOW A READY STRING: "$73.4M"
+                    'volume_raw': pred.get('volume_raw', 0),     # ← optional number
+                    'current_price': f"${pred['current_price']:,.2f}",
+                    'change_pct': f"{pred['change_pct']:+.2f}%"
+                },
+                'raw_prediction': pred,
+                'source': result['source']
+            }
             else:
                 return {
                     'success': False,
