@@ -14,11 +14,11 @@ SUPPORTED_COINS = [
     "SOLUSDT",
     "XRPUSDT",
     "DOGEUSDT",
-    # "SHIBUSDT",
-    # "PEPEUSDT",
-    # "LINKUSDT",
-    # "AVAXUSDT",
-    # "TONUSDT"
+    "SHIBUSDT",
+    "PEPEUSDT",
+    "LINKUSDT",
+    "AVAXUSDT",
+    "TONUSDT"
 ]
 
 def train_all_models():
