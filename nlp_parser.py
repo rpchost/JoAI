@@ -191,7 +191,7 @@ class JoAIConversationNLP:
                 f"Yo! Just finished training on 2000+ candles for each coin.\n{ALL_COINS_EMOJI}\nName your fighter.",
                 f"Sup! I now predict {len(COINS_READABLE)} coins with deep LSTM brains. DOGE? PEPE? BTC? You name it — I got it.",
                 f"Hey there! Welcome to the new JoAI — now covering:\n{ALL_COINS_EMOJI}\nWhich one should we analyze first?",
-                f"Ello! I can predict the next move for BTC, ETH, SOL, XRP, DOGE, SHIB, PEPE and 5 more. What’s cooking?"
+                f"Hello! I can predict the next move for BTC, ETH, SOL, XRP, DOGE, SHIB, PEPE and 5 more. What’s cooking?"
             ]
         }
         
@@ -674,7 +674,7 @@ Want to know more? Ask me about any other indicator! 🚀"""
                 return {
                     'success': False,
                     'intent': 'prediction',
-                    'message': "I'd love to help with a prediction! 🔮 Which cryptocurrency are you interested in? I can predict BTC, ETH, SOL, ADA, or BNB!"
+                    'message': "I'd love to help with a prediction! 🔮 Which cryptocurrency are you interested in? I can predict BTC, ETH, SOL, ADA, XRP, BNB, and many more!"
                 }
             
             # Make prediction

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import os
 from dotenv import load_dotenv
+import time
 
 # Load environment variables
 load_dotenv()
@@ -44,39 +45,122 @@ def get_db_config():
             "url": os.getenv("QUESTDB_URL", "http://localhost:9000")
         }
 
+# def fetch_candles_from_binance(symbol="BTC/USDT", timeframe="1h", limit=1000):
+#     """Fetch OHLCV data from Binance"""
+#     import logging
+#     logger = logging.getLogger(__name__)
+    
+#     try:
+#         logger.info(f"Initializing Binance exchange...")
+#         exchange = ccxt.binance({
+#             'enableRateLimit': True,
+#             'timeout': 30000,  # 30 seconds timeout
+#         })
+        
+#         logger.info(f"Fetching {limit} candles for {symbol} from Binance...")
+#         since = int((datetime.now() - timedelta(hours=limit)).timestamp() * 1000)
+        
+#         logger.info(f"Making API call to Binance (since: {datetime.fromtimestamp(since/1000)})")
+#         candles = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
+        
+#         logger.info(f"Received {len(candles)} candles from Binance")
+
+#         df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
+#         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+#         df["symbol"] = symbol.replace("/", "")  # e.g., BTCUSDT
+
+#         logger.info(f"✅ Successfully fetched {len(df)} candles for {symbol}")
+#         logger.info(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+#         return df
+        
+#     except Exception as e:
+#         logger.error(f"❌ Error fetching data from Binance for {symbol}: {str(e)}")
+#         import traceback
+#         logger.error(traceback.format_exc())
+#         raise
+
 def fetch_candles_from_binance(symbol="BTC/USDT", timeframe="1h", limit=1000):
-    """Fetch OHLCV data from Binance"""
+    """Fetch REAL, RECENT OHLCV data from Binance — no fake old data"""
+    import ccxt
+    import time
     import logging
     logger = logging.getLogger(__name__)
+
+    exchange = ccxt.binance({
+        'enableRateLimit': True,
+        'options': {
+            'defaultType': 'spot',
+            'adjustForTimeDifference': True,
+        },
+        'timeout': 30000,
+    })
+
+    # CRITICAL: Do NOT set 'since' — let Binance give latest first
+    all_candles = []
+    timeframe_duration = exchange.parse_timeframe(timeframe) * 1000
+    now = exchange.milliseconds()
+
+    logger.info(f"Fetching {limit} {timeframe} candles for {symbol} (latest first)...")
+
+    while len(all_candles) < limit:
+        try:
+            candles = exchange.fetch_ohlcv(symbol, timeframe, limit=min(1000, limit - len(all_candles)))
+            
+            if not candles:
+                break
+                
+            all_candles.extend(candles)
+            logger.info(f"Fetched {len(candles)} candles, total: {len(all_candles)}")
+
+            # Stop if we're getting old data
+            oldest_ts = candles[0][0]
+            if len(all_candles) >= limit:
+                break
+
+            # Sleep to avoid rate limit
+            time.sleep(0.2)
+
+        except Exception as e:
+            logger.error(f"Error during fetch: {e}")
+            time.sleep(1)
+            continue
+
+    # Sort by timestamp and take latest N
+    all_candles.sort(key=lambda x: x[0])
+    latest_candles = all_candles[-limit:]
+
+    df = pd.DataFrame(latest_candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df["symbol"] = symbol.replace("/", "")
+
+    # FINAL SANITY CHECK
+    latest_close = df['close'].iloc[-1]
+    symbol = df['symbol'].iloc[-1]
     
-    try:
-        logger.info(f"Initializing Binance exchange...")
-        exchange = ccxt.binance({
-            'enableRateLimit': True,
-            'timeout': 30000,  # 30 seconds timeout
-        })
-        
-        logger.info(f"Fetching {limit} candles for {symbol} from Binance...")
-        since = int((datetime.now() - timedelta(hours=limit)).timestamp() * 1000)
-        
-        logger.info(f"Making API call to Binance (since: {datetime.fromtimestamp(since/1000)})")
-        candles = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
-        
-        logger.info(f"Received {len(candles)} candles from Binance")
+    price_ranges = {
+        'BTCUSDT': (50000, 200000),
+        'ETHUSDT': (1500, 8000),
+        'BNBUSDT': (400, 1500),
+        'SOLUSDT': (80, 500),
+        'XRPUSDT': (0.3, 5),
+        'ADAUSDT': (0.2, 3),
+        'DOGEUSDT': (0.05, 1),
+        'TONUSDT': (2, 20),
+        'AVAXUSDT': (15, 200),
+        'LINKUSDT': (8, 100),
+        'SHIBUSDT': (0.000005, 0.0001),
+        'PEPEUSDT': (0.000001, 0.00005),
+    }
+    
+    expected_min, expected_max = price_ranges.get(symbol, (0.001, 1000000))  # fallback
+    
+    if not (expected_min <= latest_close <= expected_max):
+        print(f"WARNING: Suspicious price for {symbol}: ${latest_close:,.8f} — but allowing (might be real move)")
+        # Don't raise — just warn
+    else:
+        print(f"Price check OK → {symbol}: ${latest_close:,.6f}")
 
-        df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
-        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-        df["symbol"] = symbol.replace("/", "")  # e.g., BTCUSDT
-
-        logger.info(f"✅ Successfully fetched {len(df)} candles for {symbol}")
-        logger.info(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
-        return df
-        
-    except Exception as e:
-        logger.error(f"❌ Error fetching data from Binance for {symbol}: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        raise
+    return df
 
 def fetch_candles_from_coingecko(symbol="BTC/USDT", timeframe="1h", limit=1000):
     """Fetch data from CoinGecko API (no geo-restrictions)"""
@@ -362,12 +446,37 @@ def populate_multiple_symbols():
         "failed_symbols": failed_symbols
     }
 
-if __name__ == "__main__":
-    import sys
 
-    if len(sys.argv) > 1 and sys.argv[1] == "multi":
-        # Populate multiple symbols
+import sys
+import argparse
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Fetch crypto candle data from Binance")
+    parser.add_argument("command", nargs="?", default=None, help="Type 'multi' to fetch all 12 coins")
+    parser.add_argument("--symbol", type=str, default="BTC/USDT", help="Symbol like BTC/USDT, PEPE/USDT, etc.")
+    parser.add_argument("--limit", type=int, default=2000, help="Number of hourly candles (default: 2000)")
+    parser.add_argument("--timeframe", type=str, default="1h", help="Timeframe: 1m, 5m, 1h, 4h, 1d etc.")
+
+    args = parser.parse_args()
+
+    # If user explicitly says "multi" → fetch all
+    if args.command == "multi" or (len(sys.argv) > 1 and sys.argv[1] == "multi"):
+        print("Fetching ALL 12 coins (2000 candles each)...")
         populate_multiple_symbols()
+
+    # Otherwise → fetch single symbol mode
     else:
-        # Fetch data for BTC/USDT by default
-        fetch_and_store_candles()
+        print(f"Fetching {args.symbol} → {args.limit} candles @ {args.timeframe}")
+        fetch_and_store_candles(
+            symbol=args.symbol,
+            timeframe=args.timeframe,
+            limit=args.limit
+        )
+        
+        # if __name__ == "__main__":
+#     if len(sys.argv) > 1 and sys.argv[1] == "multi":
+#         # Populate multiple symbols
+#         populate_multiple_symbols()
+#     else:
+#         # Fetch data for BTC/USDT by default
+#         fetch_and_store_candles()
