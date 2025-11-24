@@ -104,13 +104,74 @@ def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
     return df
 
 
+# def predict_next_candle(symbol: str = "BTCUSDT"):
+#     """
+#     MAIN PREDICTION FUNCTION — CLEAN, SAFE, NO FALLBACKS
+#     """
+#     symbol = symbol.upper()
+
+#     # === 1. Load model + scalers ===
+#     try:
+#         assets = load_model_and_scalers(symbol)
+#     except FileNotFoundError as e:
+#         raise Exception(f"Model not trained yet for {symbol}. Please train the model first.") from e
+
+#     model = assets["model"]
+#     scaler = assets["scaler"]
+#     target_scaler = assets["target_scaler"]
+
+#     # === 2. Get latest data ===
+#     df = get_latest_data(symbol)
+
+#     # === 3. Add indicators ===
+#     from utils.indicators import add_technical_indicators
+#     df = add_technical_indicators(df)
+
+#     # === 4. Prepare input sequence ===
+#     latest = df.tail(SEQUENCE_LENGTH)[FEATURE_COLUMNS].values
+#     scaled = scaler.transform(latest)
+#     X = scaled.reshape((1, SEQUENCE_LENGTH, len(FEATURE_COLUMNS)))
+
+#     # === 5. Predict ===
+#     pred_scaled = model.predict(X, verbose=0)[0][0]
+#     pred_close = float(target_scaler.inverse_transform([[pred_scaled]])[0][0])
+#     last_close = float(df["close"].iloc[-1])
+
+#     # === 6. Generate realistic OHLC ===
+#     change = (pred_close - last_close) / last_close
+#     volatility = df["close"].pct_change().std() * 3  # rough volatility
+
+#     pred_open = last_close
+#     pred_high = pred_close * (1 + abs(change) * 0.6 + volatility)
+#     pred_low = pred_close * (1 - abs(change) * 0.6 - volatility)
+#     # pred_volume = float(df["volume"].tail(20).mean())
+#     raw_volume = float(df["volume"].tail(20).mean())
+#     current_price = float(df["close"].iloc[-1])
+#     usd_volume = raw_volume * current_price
+
+#     # Choose one:
+#     #pred_volume = round(raw_volume, 1)           # → "857.3 BTC"
+#     pred_volume = f"${usd_volume:,.0f}"
+
+#     # Enforce OHLC logic
+#     pred_high = max(pred_high, pred_close, pred_open)
+#     pred_low = min(pred_low, pred_close, pred_open)
+
+#     return {
+#         "open": round(pred_open, 2),
+#         "high": round(pred_high, 2),
+#         "low": round(pred_low, 2),
+#         "close": round(pred_close, 2),
+#         "volume": round(pred_volume, 0)
+#     }
+
 def predict_next_candle(symbol: str = "BTCUSDT"):
     """
-    MAIN PREDICTION FUNCTION — CLEAN, SAFE, NO FALLBACKS
+    FINAL PRODUCTION VERSION — Beautiful, accurate, no-bullshit predictions
     """
     symbol = symbol.upper()
 
-    # === 1. Load model + scalers ===
+    # Load model + scalers
     try:
         assets = load_model_and_scalers(symbol)
     except FileNotFoundError as e:
@@ -120,44 +181,56 @@ def predict_next_candle(symbol: str = "BTCUSDT"):
     scaler = assets["scaler"]
     target_scaler = assets["target_scaler"]
 
-    # === 2. Get latest data ===
+    # Get latest data
     df = get_latest_data(symbol)
 
-    # === 3. Add indicators ===
+    # Add indicators
     from utils.indicators import add_technical_indicators
     df = add_technical_indicators(df)
 
-    # === 4. Prepare input sequence ===
+    # Prepare sequence
     latest = df.tail(SEQUENCE_LENGTH)[FEATURE_COLUMNS].values
     scaled = scaler.transform(latest)
     X = scaled.reshape((1, SEQUENCE_LENGTH, len(FEATURE_COLUMNS)))
 
-    # === 5. Predict ===
+    # Predict
     pred_scaled = model.predict(X, verbose=0)[0][0]
     pred_close = float(target_scaler.inverse_transform([[pred_scaled]])[0][0])
     last_close = float(df["close"].iloc[-1])
 
-    # === 6. Generate realistic OHLC ===
-    change = (pred_close - last_close) / last_close
-    volatility = df["close"].pct_change().std() * 3  # rough volatility
+    # Realistic OHLC
+    change_pct = (pred_close - last_close) / last_close
+    volatility = df["close"].pct_change().std() * 3
 
     pred_open = last_close
-    pred_high = pred_close * (1 + abs(change) * 0.6 + volatility)
-    pred_low = pred_close * (1 - abs(change) * 0.6 - volatility)
-    pred_volume = float(df["volume"].tail(20).mean())
+    pred_high = pred_close * (1 + abs(change_pct) * 0.6 + volatility)
+    pred_low = pred_close * (1 - abs(change_pct) * 0.6 - volatility)
 
-    # Enforce OHLC logic
+    # Enforce logic
     pred_high = max(pred_high, pred_close, pred_open)
     pred_low = min(pred_low, pred_close, pred_open)
+
+    # FINAL PROFESSIONAL VOLUME DISPLAY
+    raw_volume_btc = df["volume"].tail(20).mean()
+    usd_volume = raw_volume_btc * last_close
+
+    if usd_volume >= 1_000_000_000:
+        volume_str = f"${usd_volume/1e9:.2f}B"
+    elif usd_volume >= 1_000_000:
+        volume_str = f"${usd_volume/1e6:.1f}M"
+    else:
+        volume_str = f"${usd_volume:,.0f}"
 
     return {
         "open": round(pred_open, 2),
         "high": round(pred_high, 2),
         "low": round(pred_low, 2),
         "close": round(pred_close, 2),
-        "volume": round(pred_volume, 0)
+        "volume_btc": round(raw_volume_btc, 1),
+        "volume_usd": volume_str,
+        "current_price": round(last_close, 2),
+        "predicted_change_pct": round(change_pct * 100, 2)
     }
-
 
 # Optional: Clear cache (for hot reloads)
 def clear_model_cache():
