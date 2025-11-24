@@ -149,9 +149,15 @@ def predict_next_candle(symbol: str = "BTCUSDT"):
     current_price = float(df["close"].iloc[-1])
     usd_volume = raw_volume * current_price
 
-    # Choose one:
-    #pred_volume = round(raw_volume, 1)           # → "857.3 BTC"
-    pred_volume = f"${usd_volume:,.0f}"
+    raw_volume_btc = df["volume"].tail(20).mean()
+    usd_volume = raw_volume_btc * last_close
+
+    if usd_volume >= 1_000_000_000:
+        volume_display = f"${usd_volume/1e9:.2f}B"
+    elif usd_volume >= 1_000_000:
+        volume_display = f"${usd_volume/1e6:.1f}M"
+    else:
+        volume_display = f"${usd_volume:,.0f}"
 
     # Enforce OHLC logic
     pred_high = max(pred_high, pred_close, pred_open)
@@ -162,7 +168,10 @@ def predict_next_candle(symbol: str = "BTCUSDT"):
         "high": round(pred_high, 2),
         "low": round(pred_low, 2),
         "close": round(pred_close, 2),
-        "volume": round(pred_volume, 0)
+        "volume": volume_display,                    # ← now a clean string
+        "volume_btc": round(raw_volume_btc, 1),       # ← optional: raw BTC volume
+        "current_price": round(last_close, 2),
+        "change_pct": round((pred_close - last_close) / last_close * 100, 2)
     }
 
 
