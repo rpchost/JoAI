@@ -1,396 +1,166 @@
-import numpy as np
-import pandas as pd
+# lstm_model.py — FINAL BULLETPROOF VERSION (2025)
 import os
 import pickle
 import psycopg2
+import pandas as pd
+import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load env
 load_dotenv()
 
-# CRITICAL: Don't import TensorFlow at module level to save memory!
-# Only import when actually needed for training/prediction
+# === CONFIG ===
+MODEL_DIR = "models"
+SEQUENCE_LENGTH = 60
+FEATURE_COLUMNS = [
+    'open', 'high', 'low', 'close', 'volume',
+    'sma_20', 'sma_50', 'ema_12', 'ema_26', 'rsi',
+    'macd', 'macd_signal', 'macd_hist',
+    'bb_upper', 'bb_middle', 'bb_lower', 'atr',
+    'stoch_k', 'stoch_d', 'willr', 'volume_sma', 'roc'
+]
 
-def get_db_config():
-    connection_type = os.getenv("DB_CONNECTION", "postgresql").lower()
+# Ensure models directory exists
+os.makedirs(MODEL_DIR, exist_ok=True)
 
-    if connection_type == "postgresql":
-        database_url = os.getenv("DATABASE_URL")
-        if database_url:
-            return {
-                "type": "postgresql",
-                "connection_string": database_url
-            }
-        else:
-            return {
-                "type": "postgresql",
-                "host": os.getenv("POSTGRES_HOST", "localhost"),
-                "port": int(os.getenv("POSTGRES_PORT", 5432)),
-                "database": os.getenv("POSTGRES_DATABASE", "joai_db"),
-                "user": os.getenv("POSTGRES_USER", "postgres"),
-                "password": os.getenv("POSTGRES_PASSWORD", "")
-            }
-    else:
-        raise Exception(f"Unsupported database type: {connection_type}")
+# === PER-SYMBOL MODEL CACHE ===
+_model_cache = {}  # {symbol: {"model": ..., "scaler": ..., "target_scaler": ...}}
 
-class LSTMCryptoPredictor:
-    # Class-level cache for model and scalers (shared across all instances)
-    _model_cache = {}
-    _instance_count = 0
-    
-    def __init__(self, symbol="BTCUSDT", sequence_length=60, model_path="models/saved_model.keras"):
-        self.symbol = symbol
-        self.sequence_length = sequence_length
-        self.model_path = model_path
-        self.scaler_path = model_path.replace('.keras', '_scaler.pkl')
-        self.target_scaler_path = model_path.replace('.keras', '_target_scaler.pkl')
-        self.model = None
-        self.scaler = MinMaxScaler(feature_range=(0, 1))
-        self.target_scaler = MinMaxScaler(feature_range=(0, 1))
-        self.feature_columns = None
-        
-        LSTMCryptoPredictor._instance_count += 1
-        
-        # Create models directory if it doesn't exist
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
-    def fetch_training_data(self, limit=1000):
-        """Fetch historical data with timeout (OPTIMIZED)"""
-        db_config = get_db_config()
+def _get_model_paths(symbol: str):
+    """Return exact paths for a symbol — NO FALLBACKS EVER"""
+    base = os.path.join(MODEL_DIR, f"saved_model_{symbol}")
+    return {
+        "model": f"{base}.keras",
+        "scaler": f"{base}_scaler.pkl",
+        "target_scaler": f"{base}_target_scaler.pkl"
+    }
 
-        if db_config["type"] == "postgresql":
-            try:
-                if "connection_string" in db_config:
-                    connection = psycopg2.connect(
-                        db_config["connection_string"],
-                        connect_timeout=10  # Timeout protection
-                    )
-                else:
-                    connection = psycopg2.connect(
-                        host=db_config["host"],
-                        user=db_config["user"],
-                        password=db_config["password"],
-                        database=db_config["database"],
-                        port=db_config["port"],
-                        connect_timeout=10
-                    )
-                    
-                with connection.cursor() as cursor:
-                    # Use parameterized query (SQL injection protection)
-                    cursor.execute("""
-                        SELECT timestamp, open, high, low, close, volume
-                        FROM crypto_candles
-                        WHERE symbol = %s
-                        ORDER BY timestamp ASC
-                        LIMIT %s
-                    """, (self.symbol, limit))
-                    data = cursor.fetchall()
-                    column_names = [desc[0] for desc in cursor.description]
-                    data = [dict(zip(column_names, row)) for row in data]
-            except psycopg2.Error as e:
-                raise Exception(f"PostgreSQL query error: {e}")
-            finally:
-                if 'connection' in locals():
-                    connection.close()
 
-            if len(data) < self.sequence_length + 10:
-                raise Exception(f"Insufficient data for training. Need at least {self.sequence_length + 10} records, got {len(data)}")
+def load_model_and_scalers(symbol: str):
+    """Load model + scalers for a symbol — raises clear error if missing"""
+    if symbol in _model_cache:
+        return _model_cache[symbol]
 
-            df = pd.DataFrame(data)
-            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-            df = df.sort_values('timestamp').dropna()
-        else:
-            raise Exception(f"Unsupported database type: {db_config['type']}")
+    paths = _get_model_paths(symbol)
 
-        return df
-
-    def prepare_data(self, df):
-        """Prepare data with technical indicators and scaling (OPTIMIZED)"""
-        from utils.indicators import add_technical_indicators
-        
-        # Add technical indicators (all 22 features)
-        df = add_technical_indicators(df)
-
-        # Define feature columns (OHLCV + 17 technical indicators = 22 features)
-        self.feature_columns = [
-            'open', 'high', 'low', 'close', 'volume',
-            'sma_20', 'sma_50', 'ema_12', 'ema_26', 'rsi',
-            'macd', 'macd_signal', 'macd_hist',
-            'bb_upper', 'bb_middle', 'bb_lower', 'atr',
-            'stoch_k', 'stoch_d', 'willr', 'volume_sma', 'roc'
-        ]
-
-        # Validate all features exist
-        missing_cols = [col for col in self.feature_columns if col not in df.columns]
-        if missing_cols:
-            raise ValueError(f"Missing feature columns: {missing_cols}")
-
-        # Scale features (22 features)
-        feature_data = df[self.feature_columns].values
-        scaled_data = self.scaler.fit_transform(feature_data)
-
-        # Scale targets separately (next close price)
-        targets = df['close'].shift(-1).values[:-1]
-        scaled_targets = self.target_scaler.fit_transform(targets.reshape(-1, 1))
-
-        return scaled_data[:-1], scaled_targets
-
-    def create_sequences(self, data, targets):
-        """Create sequences for LSTM input (OPTIMIZED)"""
-        # Pre-allocate arrays for efficiency
-        n_samples = len(data) - self.sequence_length
-        X = np.zeros((n_samples, self.sequence_length, data.shape[1]), dtype=np.float32)
-        y = np.zeros((n_samples, 1), dtype=np.float32)
-        
-        for i in range(n_samples):
-            X[i] = data[i:(i + self.sequence_length)]
-            y[i] = targets[i + self.sequence_length]
-
-        return X, y
-
-    def build_model(self, input_shape):
-        """Build LSTM model architecture (KEPT ORIGINAL QUALITY)"""
-        # Lazy import TensorFlow only when needed
-        from tensorflow.keras.models import Sequential
-        from tensorflow.keras.layers import LSTM, Dense, Dropout, Bidirectional
-        from tensorflow.keras.optimizers import Adam
-        
-        # SAME ARCHITECTURE - High quality model
-        model = Sequential([
-            Bidirectional(LSTM(128, return_sequences=True, input_shape=input_shape)),
-            Dropout(0.2),
-            Bidirectional(LSTM(64, return_sequences=True)),
-            Dropout(0.2),
-            LSTM(32),
-            Dropout(0.2),
-            Dense(16, activation='relu'),
-            Dense(1)  # Predict next close price
-        ])
-
-        model.compile(
-            optimizer=Adam(learning_rate=0.001),
-            loss='mean_squared_error',
-            metrics=['mae']
+    if not os.path.exists(paths["model"]):
+        raise FileNotFoundError(
+            f"Model NOT found for {symbol}!\n"
+            f"Expected: {paths['model']}\n"
+            f"Run: python train_all_models.py first!"
         )
 
-        return model
-
-    def train(self, epochs=100, batch_size=32, validation_split=0.2):
-        """Train the LSTM model (OPTIMIZED WITH CLEANUP)"""
-        from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-        import tensorflow as tf
-        
-        print(f"Fetching training data for {self.symbol}...")
-        df = self.fetch_training_data(limit=2000)
-
-        print(f"Preparing data with {len(df)} records...")
-        scaled_data, scaled_targets = self.prepare_data(df)
-
-        X, y = self.create_sequences(scaled_data, scaled_targets)
-        print(f"Training data shape: {X.shape}, Target shape: {y.shape}")
-
-        # Build model
-        self.model = self.build_model((X.shape[1], X.shape[2]))
-
-        # Callbacks
-        early_stopping = EarlyStopping(
-            monitor='val_loss', 
-            patience=10, 
-            restore_best_weights=True
-        )
-        checkpoint = ModelCheckpoint(
-            self.model_path, 
-            monitor='val_loss', 
-            save_best_only=True
+    if not os.path.exists(paths["scaler"]) or not os.path.exists(paths["target_scaler"]):
+        raise FileNotFoundError(
+            f"Scalers missing for {symbol}!\n"
+            f"Missing: {paths['scaler']} or {paths['target_scaler']}"
         )
 
-        # Train model
-        print("Training LSTM model...")
-        history = self.model.fit(
-            X, y,
-            epochs=epochs,
-            batch_size=batch_size,
-            validation_split=validation_split,
-            callbacks=[early_stopping, checkpoint],
-            verbose=1
-        )
+    # Lazy import TF only when needed
+    from tensorflow.keras.models import load_model
 
-        # Save scalers
-        with open(self.scaler_path, 'wb') as f:
-            pickle.dump(self.scaler, f)
-        with open(self.target_scaler_path, 'wb') as f:
-            pickle.dump(self.target_scaler, f)
+    print(f"Loading model for {symbol}...")
+    model = load_model(paths["model"])
+    with open(paths["scaler"], "rb") as f:
+        scaler = pickle.load(f)
+    with open(paths["target_scaler"], "rb") as f:
+        target_scaler = pickle.load(f)
 
-        print(f"Model trained and saved to {self.model_path}")
-        
-        # CRITICAL: Clear TensorFlow session to free memory
-        tf.keras.backend.clear_session()
-        
-        return history
+    # Cache it
+    _model_cache[symbol] = {
+        "model": model,
+        "scaler": scaler,
+        "target_scaler": target_scaler
+    }
 
-    def load_model(self):
-        """Load trained model with caching (OPTIMIZED)"""
-        cache_key = self.model_path
-        
-        # Check class-level cache first
-        if cache_key in self._model_cache:
-            print(f"Loading model from memory cache")
-            cached = self._model_cache[cache_key]
-            self.model = cached['model']
-            self.scaler = cached['scaler']
-            self.target_scaler = cached['target_scaler']
-            self.feature_columns = cached['features']
-            return
+    return _model_cache[symbol]
 
-        if os.path.exists(self.model_path):
-            # Lazy import TensorFlow
-            from tensorflow.keras.models import load_model as keras_load_model
-            
-            print(f"Loading model from disk: {self.model_path}")
-            self.model = keras_load_model(self.model_path)
 
-            # Load scalers
-            if os.path.exists(self.scaler_path) and os.path.exists(self.target_scaler_path):
-                with open(self.scaler_path, 'rb') as f:
-                    self.scaler = pickle.load(f)
-                with open(self.target_scaler_path, 'rb') as f:
-                    self.target_scaler = pickle.load(f)
-            else:
-                raise Exception("Scalers not found. Please retrain the model.")
+def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
+    """Fetch latest candles from DB"""
+    conn_str = os.getenv("DATABASE_URL")
+    if not conn_str:
+        raise ValueError("DATABASE_URL not set!")
 
-            # Set feature columns
-            self.feature_columns = [
-                'open', 'high', 'low', 'close', 'volume',
-                'sma_20', 'sma_50', 'ema_12', 'ema_26', 'rsi',
-                'macd', 'macd_signal', 'macd_hist',
-                'bb_upper', 'bb_middle', 'bb_lower', 'atr',
-                'stoch_k', 'stoch_d', 'willr', 'volume_sma', 'roc'
-            ]
-            
-            # Cache the loaded model (shared across all instances)
-            self._model_cache[cache_key] = {
-                'model': self.model,
-                'scaler': self.scaler,
-                'target_scaler': self.target_scaler,
-                'features': self.feature_columns
-            }
-            print(f"Model cached in memory")
-        else:
-            raise FileNotFoundError(f"Model file not found: {self.model_path}")
+    conn = psycopg2.connect(conn_str, connect_timeout=10)
+    try:
+        query = """
+            SELECT timestamp, open, high, low, close, volume
+            FROM crypto_candles
+            WHERE symbol = %s
+            ORDER BY timestamp DESC
+            LIMIT %s
+        """
+        df = pd.read_sql(query, conn, params=(symbol, limit))
+    finally:
+        conn.close()
 
-    def predict_next_candle(self, recent_data=None):
-        """Predict next candle (OPTIMIZED WITH TIMEOUTS)"""
-        if self.model is None:
-            try:
-                self.load_model()
-            except FileNotFoundError:
-                raise Exception("Model not trained yet. Please train the model first.")
+    if len(df) < SEQUENCE_LENGTH:
+        raise ValueError(f"Not enough data for {symbol}: {len(df)} rows")
 
-        # Get recent data
-        if recent_data is None:
-            db_config = get_db_config()
+    df = df.iloc[::-1].reset_index(drop=True)  # oldest first
+    return df
 
-            if db_config["type"] == "postgresql":
-                try:
-                    if "connection_string" in db_config:
-                        connection = psycopg2.connect(
-                            db_config["connection_string"],
-                            connect_timeout=10  # Timeout protection
-                        )
-                    else:
-                        connection = psycopg2.connect(
-                            host=db_config["host"],
-                            user=db_config["user"],
-                            password=db_config["password"],
-                            database=db_config["database"],
-                            port=db_config["port"],
-                            connect_timeout=10
-                        )
-                        
-                    with connection.cursor() as cursor:
-                        cursor.execute("""
-                            SELECT timestamp, open, high, low, close, volume
-                            FROM crypto_candles
-                            WHERE symbol = %s
-                            ORDER BY timestamp DESC
-                            LIMIT %s
-                        """, (self.symbol, self.sequence_length + 10))
-                        data = cursor.fetchall()
-                        column_names = [desc[0] for desc in cursor.description]
-                        data = [dict(zip(column_names, row)) for row in data]
-                except psycopg2.Error as e:
-                    raise Exception(f"PostgreSQL query error: {e}")
-                finally:
-                    if 'connection' in locals():
-                        connection.close()
 
-                if not data:
-                    raise Exception(f"No data found for symbol {self.symbol}")
+def predict_next_candle(symbol: str = "BTCUSDT"):
+    """
+    MAIN PREDICTION FUNCTION — CLEAN, SAFE, NO FALLBACKS
+    """
+    symbol = symbol.upper()
 
-                recent_data = pd.DataFrame(data)
-                recent_data['timestamp'] = pd.to_datetime(recent_data['timestamp'], errors='coerce')
-                recent_data = recent_data.dropna(subset=['timestamp']).sort_values('timestamp')
+    # === 1. Load model + scalers ===
+    try:
+        assets = load_model_and_scalers(symbol)
+    except FileNotFoundError as e:
+        raise Exception(f"Model not trained yet for {symbol}. Please train the model first.") from e
 
-                # Convert decimal to float
-                for col in ['open', 'high', 'low', 'close', 'volume']:
-                    if col in recent_data.columns:
-                        recent_data[col] = recent_data[col].apply(
-                            lambda x: float(x) if hasattr(x, '__float__') else x
-                        )
-            else:
-                raise Exception(f"Unsupported database type: {db_config['type']}")
+    model = assets["model"]
+    scaler = assets["scaler"]
+    target_scaler = assets["target_scaler"]
 
-        # Add indicators
-        from utils.indicators import add_technical_indicators
-        recent_data = add_technical_indicators(recent_data)
+    # === 2. Get latest data ===
+    df = get_latest_data(symbol)
 
-        # Validate data length
-        if len(recent_data) < self.sequence_length:
-            raise Exception(f"Insufficient data for prediction. Need {self.sequence_length} records, got {len(recent_data)}")
+    # === 3. Add indicators ===
+    from utils.indicators import add_technical_indicators
+    df = add_technical_indicators(df)
 
-        # Get latest sequence
-        latest_data = recent_data.tail(self.sequence_length)[self.feature_columns].values
-        scaled_data = self.scaler.transform(latest_data)
+    # === 4. Prepare input sequence ===
+    latest = df.tail(SEQUENCE_LENGTH)[FEATURE_COLUMNS].values
+    scaled = scaler.transform(latest)
+    X = scaled.reshape((1, SEQUENCE_LENGTH, len(FEATURE_COLUMNS)))
 
-        # Reshape for LSTM input
-        X_pred = scaled_data.reshape((1, self.sequence_length, len(self.feature_columns)))
+    # === 5. Predict ===
+    pred_scaled = model.predict(X, verbose=0)[0][0]
+    pred_close = float(target_scaler.inverse_transform([[pred_scaled]])[0][0])
+    last_close = float(df["close"].iloc[-1])
 
-        # Make prediction
-        predicted_scaled = self.model.predict(X_pred, verbose=0)[0][0]
+    # === 6. Generate realistic OHLC ===
+    change = (pred_close - last_close) / last_close
+    volatility = df["close"].pct_change().std() * 3  # rough volatility
 
-        # Inverse transform to get actual price
-        predicted_close = self.target_scaler.inverse_transform([[predicted_scaled]])[0][0]
+    pred_open = last_close
+    pred_high = pred_close * (1 + abs(change) * 0.6 + volatility)
+    pred_low = pred_close * (1 - abs(change) * 0.6 - volatility)
+    pred_volume = float(df["volume"].tail(20).mean())
 
-        # Calculate OHLC
-        last_close = float(recent_data['close'].iloc[-1])
-        change_pct = (predicted_close - last_close) / last_close
+    # Enforce OHLC logic
+    pred_high = max(pred_high, pred_close, pred_open)
+    pred_low = min(pred_low, pred_close, pred_open)
 
-        predicted_open = last_close
-        predicted_high = predicted_close * (1 + abs(change_pct) * 0.3)
-        predicted_low = predicted_close * (1 - abs(change_pct) * 0.3)
+    return {
+        "open": round(pred_open, 2),
+        "high": round(pred_high, 2),
+        "low": round(pred_low, 2),
+        "close": round(pred_close, 2),
+        "volume": round(pred_volume, 0)
+    }
 
-        # Ensure high >= close >= low
-        predicted_high = max(predicted_high, predicted_close)
-        predicted_low = min(predicted_low, predicted_close)
 
-        return {
-            'open': float(predicted_open),
-            'high': float(predicted_high),
-            'low': float(predicted_low),
-            'close': float(predicted_close),
-            'volume': float(recent_data['volume'].tail(20).mean())
-        }
-
-# Singleton instance with lazy initialization
-_predictor_instance = None
-
-def predict_next_candle(symbol="BTCUSDT"):
-    """Convenience function with singleton pattern (OPTIMIZED)"""
-    global _predictor_instance
-    
-    if _predictor_instance is None:
-        _predictor_instance = LSTMCryptoPredictor()
-    
-    _predictor_instance.symbol = symbol
-    return _predictor_instance.predict_next_candle()
+# Optional: Clear cache (for hot reloads)
+def clear_model_cache():
+    global _model_cache
+    _model_cache.clear()
+    import gc; gc.collect()
