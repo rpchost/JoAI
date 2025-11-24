@@ -144,20 +144,7 @@ def predict_next_candle(symbol: str = "BTCUSDT"):
     pred_open = last_close
     pred_high = pred_close * (1 + abs(change) * 0.6 + volatility)
     pred_low = pred_close * (1 - abs(change) * 0.6 - volatility)
-    # pred_volume = float(df["volume"].tail(20).mean())
-    raw_volume = float(df["volume"].tail(20).mean())
-    current_price = float(df["close"].iloc[-1])
-    usd_volume = raw_volume * current_price
-
-    raw_volume_btc = df["volume"].tail(20).mean()
-    usd_volume = raw_volume_btc * last_close
-
-    if usd_volume >= 1_000_000_000:
-        volume_display = f"${usd_volume/1e9:.2f}B"
-    elif usd_volume >= 1_000_000:
-        volume_display = f"${usd_volume/1e6:.1f}M"
-    else:
-        volume_display = f"${usd_volume:,.0f}"
+    pred_volume = float(df["volume"].tail(20).mean())
 
     # Enforce OHLC logic
     pred_high = max(pred_high, pred_close, pred_open)
@@ -168,12 +155,7 @@ def predict_next_candle(symbol: str = "BTCUSDT"):
         "high": round(pred_high, 2),
         "low": round(pred_low, 2),
         "close": round(pred_close, 2),
-        "volume": volume_display,                    # ← STRING: "$73.4M" or "$892.1M"
-        "volume_raw": round(raw_volume_btc, 1),      # ← NUMBER: 857.3 (for any future math)
-        "current_price": round(last_close, 2),
-        "change_pct": round((pred_close - last_close) / last_close * 100, 2),
-        "symbol": symbol,
-        "confidence": "High"  # optional flair
+        "volume": round(pred_volume, 0)
     }
 
 
