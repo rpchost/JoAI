@@ -4,6 +4,18 @@ from typing import Dict, Optional, List
 from datetime import datetime
 from models.lstm_model import predict_next_candle
 
+# === TOXICITY DETECTION & ESCALATION SYSTEM ===
+TOXIC_WORDS = [
+    # English
+    "fuck", "shit", "bitch", "cunt", "asshole", "motherfucker", "nigger", "faggot", "retard",
+    "pussy", "dick", "cock", "whore", "slut", "bastard", "crap", "damn", "hell",
+    # Variations & common bypasses
+    "fuk", "fck", "fukin", "f*ck", "sh1t", "b1tch", "a$$", "nigg", "f@g", "r3tard",
+    # Aggressive/offensive intent
+    "kill yourself", "kys", "die", "hope you die", "stupid", "idiot", "dumb", "braindead",
+    "scam", "scammer", "fraud", "fake", "garbage", "trash", "dogshit", "worthless"
+]
+
   # 1. DYNAMIC COIN LIST (add this near the top)
 COINS_READABLE = {
         'BTCUSDT': 'Bitcoin (BTC)', 'ETHUSDT': 'Ethereum (ETH)', 'BNBUSDT': 'BNB',
@@ -301,6 +313,41 @@ class JoAIConversationNLP:
             f"Lost me there! But I’m really good at predicting {ALL_COINS_STR}. Which one?",
         ]
 
+        # === TOXICITY TRACKER (per session) ===
+        self.toxicity_level = 0  # 0 = clean, 1 = warned, 2 = final warning, 3 = muted
+        self.has_been_warned = False
+
+    def is_toxic(self, query: str) -> bool:
+        """Detect profanity or aggressive language"""
+        query_lower = query.lower()
+        return any(word in query_lower for word in TOXIC_WORDS)
+
+    def handle_toxicity(self, query: str) -> Optional[Dict]:
+        """Return a warning/response if message is toxic"""
+        if not self.is_toxic(query):
+            return None
+
+        self.toxicity_level += 1
+
+        if self.toxicity_level == 1:
+            return {
+                'success': True,
+                'intent': 'toxicity_warning',
+                'message': "Hey there! I noticed some strong language. Let's keep this chat respectful and positive — we're all here to talk crypto and have a good time! No warnings next time, just good vibes only!"
+            }
+        elif self.toxicity_level == 2:
+            return {
+                'success': True,
+                'intent': 'toxicity_final_warning',
+                'message': "Warning: This is your final warning. Continued use of inappropriate, offensive, or toxic language will result in your messages being ignored and may lead to a report and account suspension on the platform. Let's keep it clean and professional — I’m here to help with predictions!"
+            }
+        else:
+            return {
+                'success': True,
+                'intent': 'toxicity_muted',
+                'message': "Due to repeated inappropriate behavior, I can no longer respond to your messages. Please respect the community guidelines."
+            }
+        
     def detect_intent(self, query: str) -> str:
         """Classify user intent"""
         query_lower = query.lower().strip()
@@ -585,6 +632,11 @@ Want to know more? Ask me about any other indicator! 🚀"""
 
     def process_query(self, query: str) -> Dict:
         """Main processing pipeline with conversational AI"""
+
+        # === TOXICITY CHECK FIRST (highest priority) ===
+        toxicity_response = self.handle_toxicity(query)
+        if toxicity_response:
+            return toxicity_response
         
         # Store query in context
         self.conversation_context['last_query'] = query
