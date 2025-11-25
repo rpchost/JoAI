@@ -101,8 +101,21 @@ def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
 def predict_next_candle(symbol: str, timeframe: str = "1 hour"):
     symbol = symbol.upper()
     tf_normalized = timeframe.lower().replace("minutes", "minute").replace("hours", "hour")
-    
-    assets = load_model_and_scalers(symbol, tf_normalized)
+
+    tf_key = timeframe.lower()
+    tf_key = tf_key.replace("minutes", "minute").replace("hours", "hour")
+    tf_key = tf_key.replace(" ", "")  # ← REMOVE ALL SPACES!
+    tf_map = {
+        "1minute": "1minute",
+        "5minute": "5minutes",     # ← YOUR TRAINED FILES USE "5minutes"
+        "15minute": "15minutes",
+        "1hour": "1hour",
+        "4hour": "4hours",
+        "1day": "1day"
+    }
+    final_key = tf_map.get(tf_key, "1hour")  # default to 1h
+    assets = load_model_and_scalers(symbol, final_key)    
+    #assets = load_model_and_scalers(symbol, tf_normalized)
     model = assets["model"]
     scaler = assets["scaler"]
     target_scaler = assets["target_scaler"]
