@@ -605,7 +605,7 @@ Want to know more? Ask me about any other indicator! 🚀"""
     def make_prediction(self, symbol: str, timeframe: str) -> Dict:
         """Make prediction using LSTM model"""
         try:
-            prediction = predict_next_candle(symbol)
+            prediction = predict_next_candle(symbol, timeframe)
             
             # Store in context
             self.conversation_context['last_symbol'] = symbol

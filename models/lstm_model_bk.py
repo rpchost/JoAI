@@ -28,48 +28,54 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 _model_cache = {}  # {symbol: {"model": ..., "scaler": ..., "target_scaler": ...}}
 
 
-def _get_model_paths(symbol: str, timeframe: str = "1 hour"):
-    """NEW: supports both old and new naming, but prefers timeframe-specific"""
-    tf_key = timeframe.lower()
-    tf_key = tf_key.replace("minutes", "minute").replace("hours", "hour").replace(" ", "")
-    
-    # First try: timeframe-specific model (NEW)
-    base = os.path.join(MODEL_DIR, f"saved_model_{symbol}_{tf_key}")
-    if os.path.exists(f"{base}.keras"):
-        return {
-            "model": f"{base}.keras",
-            "scaler": f"{base}_scaler.pkl",
-            "target_scaler": f"{base}_target_scaler.pkl"
-        }
-    
-    # Fallback: old generic model (only if you forgot to delete)
-    old_base = os.path.join(MODEL_DIR, f"saved_model_{symbol}")
+def _get_model_paths(symbol: str):
+    """Return exact paths for a symbol — NO FALLBACKS EVER"""
+    base = os.path.join(MODEL_DIR, f"saved_model_{symbol}")
     return {
-        "model": f"{old_base}.keras",
-        "scaler": f"{old_base}_scaler.pkl",
-        "target_scaler": f"{old_base}_target_scaler.pkl"
+        "model": f"{base}.keras",
+        "scaler": f"{base}_scaler.pkl",
+        "target_scaler": f"{base}_target_scaler.pkl"
     }
 
 
-def load_model_and_scalers(symbol: str, timeframe: str = "1h"):
-    key = f"{symbol}_{timeframe}"
-    if key in _model_cache:
-        return _model_cache[key]
+def load_model_and_scalers(symbol: str):
+    """Load model + scalers for a symbol — raises clear error if missing"""
+    if symbol in _model_cache:
+        return _model_cache[symbol]
 
-    paths = _get_model_paths(symbol, timeframe)
+    paths = _get_model_paths(symbol)
 
     if not os.path.exists(paths["model"]):
-        raise FileNotFoundError(f"Model not found: {paths['model']}\nRun: python train_all_models.py --timeframes")
+        raise FileNotFoundError(
+            f"Model NOT found for {symbol}!\n"
+            f"Expected: {paths['model']}\n"
+            f"Run: python train_all_models.py first!"
+        )
 
+    if not os.path.exists(paths["scaler"]) or not os.path.exists(paths["target_scaler"]):
+        raise FileNotFoundError(
+            f"Scalers missing for {symbol}!\n"
+            f"Missing: {paths['scaler']} or {paths['target_scaler']}"
+        )
+
+    # Lazy import TF only when needed
     from tensorflow.keras.models import load_model
+
+    print(f"Loading model for {symbol}...")
     model = load_model(paths["model"])
     with open(paths["scaler"], "rb") as f:
         scaler = pickle.load(f)
     with open(paths["target_scaler"], "rb") as f:
         target_scaler = pickle.load(f)
 
-    _model_cache[key] = {"model": model, "scaler": scaler, "target_scaler": target_scaler}
-    return _model_cache[key]
+    # Cache it
+    _model_cache[symbol] = {
+        "model": model,
+        "scaler": scaler,
+        "target_scaler": target_scaler
+    }
+
+    return _model_cache[symbol]
 
 
 def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
@@ -98,34 +104,51 @@ def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
     return df
 
 
-def predict_next_candle(symbol: str, timeframe: str = "1 hour"):
+def predict_next_candle(symbol: str = "BTCUSDT"):
+    """
+    MAIN PREDICTION FUNCTION — CLEAN, SAFE, NO FALLBACKS
+    """
     symbol = symbol.upper()
-    tf_normalized = timeframe.lower().replace("minutes", "minute").replace("hours", "hour")
-    
-    assets = load_model_and_scalers(symbol, tf_normalized)
+
+    # === 1. Load model + scalers ===
+    try:
+        assets = load_model_and_scalers(symbol)
+    except FileNotFoundError as e:
+        raise Exception(f"Model not trained yet for {symbol}. Please train the model first.") from e
+
     model = assets["model"]
     scaler = assets["scaler"]
     target_scaler = assets["target_scaler"]
 
+    # === 2. Get latest data ===
     df = get_latest_data(symbol)
+
+    # === 3. Add indicators ===
     from utils.indicators import add_technical_indicators
     df = add_technical_indicators(df)
 
+    # === 4. Prepare input sequence ===
     latest = df.tail(SEQUENCE_LENGTH)[FEATURE_COLUMNS].values
     scaled = scaler.transform(latest)
     X = scaled.reshape((1, SEQUENCE_LENGTH, len(FEATURE_COLUMNS)))
 
+    # === 5. Predict ===
     pred_scaled = model.predict(X, verbose=0)[0][0]
     pred_close = float(target_scaler.inverse_transform([[pred_scaled]])[0][0])
     last_close = float(df["close"].iloc[-1])
 
+    # === 6. Generate realistic OHLC ===
     change = (pred_close - last_close) / last_close
-    volatility = df["close"].pct_change().std() * 3
+    volatility = df["close"].pct_change().std() * 3  # rough volatility
 
     pred_open = last_close
-    pred_high = max(pred_close * (1 + abs(change) * 0.6 + volatility), pred_close, pred_open)
-    pred_low = min(pred_close * (1 - abs(change) * 0.6 - volatility), pred_close, pred_open)
+    pred_high = pred_close * (1 + abs(change) * 0.6 + volatility)
+    pred_low = pred_close * (1 - abs(change) * 0.6 - volatility)
     pred_volume = float(df["volume"].tail(20).mean())
+
+    # Enforce OHLC logic
+    pred_high = max(pred_high, pred_close, pred_open)
+    pred_low = min(pred_low, pred_close, pred_open)
 
     return {
         "open": round(pred_open, 2),
@@ -134,6 +157,7 @@ def predict_next_candle(symbol: str, timeframe: str = "1 hour"):
         "close": round(pred_close, 2),
         "volume": round(pred_volume, 0)
     }
+
 
 # Optional: Clear cache (for hot reloads)
 def clear_model_cache():

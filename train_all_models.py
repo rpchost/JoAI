@@ -21,52 +21,40 @@ SUPPORTED_COINS = [
     "TONUSDT"
 ]
 
+TIMEFRAMES = ["1 minute", "5 minutes", "15 minutes", "1 hour", "4 hours"]
+
+class LSTMCryptoPredictor:
+    def __init__(self, symbol, model_path, sequence_length=60, timeframe="1h"):
+        self.symbol = symbol
+        self.model_path = model_path
+        self.sequence_length = sequence_length
+        self.timeframe = timeframe.replace(" ", "")
+
 def train_all_models():
-    print(f"Starting training for {len(SUPPORTED_COINS)} cryptocurrencies...\n")
-    print("=" * 70)
+    total = len(SUPPORTED_COINS) * len(TIMEFRAMES)
+    count = 0
 
-    successful = []
-    failed = []
+    for symbol in SUPPORTED_COINS:
+        for tf in TIMEFRAMES:
+            count += 1
+            tf_key = tf.replace(" ", "")
+            model_path = f"models/saved_model_{symbol}_{tf_key}.keras"
 
-    for i, symbol in enumerate(SUPPORTED_COINS, 1):
-        print(f"[{i:2d}/{len(SUPPORTED_COINS)}] Training model for {symbol}...", end=" ")
+            print(f"[{count:3d}/{total}] Training {symbol} @ {tf} → {model_path}")
 
-        # Each coin gets its own model + scaler files
-        model_path = f"models/saved_model_{symbol}.keras"
+            try:
+                predictor = LSTMCryptoPredictor(
+                    symbol=symbol,
+                    model_path=model_path,
+                    timeframe=tf
+                )
+                predictor.train(epochs=100, batch_size=32)  # slightly less epochs per model
+                print("DONE")
+            except Exception as e:
+                print(f"FAILED: {e}")
 
-        try:
-            predictor = LSTMCryptoPredictor(
-                symbol=symbol,
-                model_path=model_path,
-                sequence_length=60
-            )
-
-            # This will fetch data, add indicators, train, save model + scalers
-            predictor.train(epochs=120, batch_size=32, validation_split=0.2)
-            
-            print("DONE")
-            successful.append(symbol)
-        except Exception as e:
-            print(f"FAILED → {str(e)}")
-            failed.append(f"{symbol}: {str(e)}")
-
-        print("-" * 70)
-
-    # Final summary
-    print("\nTRAINING COMPLETE!")
-    print(f"Successful: {len(successful)}/{len(SUPPORTED_COINS)}")
-    if successful:
-        print("Trained coins:", ", ".join(successful))
-    if failed:
-        print("Failed coins:")
-        for f in failed:
-            print(f"  • {f}")
-    else:
-        print("All models trained perfectly! JoAI is now a multi-coin prediction monster!")
+    print("JOAI IS NOW A TIMEFRAME GOD.")
 
 if __name__ == "__main__":
-    # Create models directory
     os.makedirs("models", exist_ok=True)
-    
-    # Run training
     train_all_models()
