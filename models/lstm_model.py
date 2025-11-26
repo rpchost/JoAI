@@ -28,38 +28,44 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 _model_cache = {}  # {symbol: {"model": ..., "scaler": ..., "target_scaler": ...}}
 
 
-def _get_model_paths(symbol: str, timeframe: str = "1 hour"):
-    """NEW: supports both old and new naming, but prefers timeframe-specific"""
-    tf_key = timeframe.lower()
-    tf_key = tf_key.replace("minutes", "minute").replace("hours", "hour").replace(" ", "")
+# def _get_model_paths(symbol: str, timeframe: str = "1 hour"):
+#     """NEW: supports both old and new naming, but prefers timeframe-specific"""
+#     tf_key = timeframe.lower()
+#     tf_key = tf_key.replace("minutes", "minute").replace("hours", "hour").replace(" ", "")
     
-    # First try: timeframe-specific model (NEW)
-    base = os.path.join(MODEL_DIR, f"saved_model_{symbol}_{tf_key}")
-    if os.path.exists(f"{base}.keras"):
-        return {
-            "model": f"{base}.keras",
-            "scaler": f"{base}_scaler.pkl",
-            "target_scaler": f"{base}_target_scaler.pkl"
-        }
+#     # First try: timeframe-specific model (NEW)
+#     base = os.path.join(MODEL_DIR, f"saved_model_{symbol}_{tf_key}")
+#     if os.path.exists(f"{base}.keras"):
+#         return {
+#             "model": f"{base}.keras",
+#             "scaler": f"{base}_scaler.pkl",
+#             "target_scaler": f"{base}_target_scaler.pkl"
+#         }
     
-    # Fallback: old generic model (only if you forgot to delete)
-    old_base = os.path.join(MODEL_DIR, f"saved_model_{symbol}")
-    return {
-        "model": f"{old_base}.keras",
-        "scaler": f"{old_base}_scaler.pkl",
-        "target_scaler": f"{old_base}_target_scaler.pkl"
-    }
+#     # Fallback: old generic model (only if you forgot to delete)
+#     old_base = os.path.join(MODEL_DIR, f"saved_model_{symbol}")
+#     return {
+#         "model": f"{old_base}.keras",
+#         "scaler": f"{old_base}_scaler.pkl",
+#         "target_scaler": f"{old_base}_target_scaler.pkl"
+#     }
 
 
-def load_model_and_scalers(symbol: str, timeframe: str = "1h"):
-    key = f"{symbol}_{timeframe}"
+def load_model_and_scalers(symbol: str, timeframe_key: str):
+    """timeframe_key must be the exact suffix like '5minutes', '1hour' etc."""
+    key = f"{symbol}_{timeframe_key}"
     if key in _model_cache:
         return _model_cache[key]
 
-    paths = _get_model_paths(symbol, timeframe)
+    base = os.path.join(MODEL_DIR, f"saved_model_{symbol}_{timeframe_key}")
+    paths = {
+        "model": f"{base}.keras",
+        "scaler": f"{base}_scaler.pkl",
+        "target_scaler": f"{base}_target_scaler.pkl"
+    }
 
     if not os.path.exists(paths["model"]):
-        raise FileNotFoundError(f"Model not found: {paths['model']}\nRun: python train_all_models.py --timeframes")
+        raise FileNotFoundError(f"MODEL NOT FOUND: {paths['model']}")
 
     from tensorflow.keras.models import load_model
     model = load_model(paths["model"])
@@ -100,21 +106,21 @@ def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
 
 def predict_next_candle(symbol: str, timeframe: str = "1 hour"):
     symbol = symbol.upper()
-    tf_normalized = timeframe.lower().replace("minutes", "minute").replace("hours", "hour")
+    
+    # CRITICAL: Convert human timeframe → exact trained model suffix
+    tf = timeframe.lower()
+    if "1 minute" in tf or "1m" in tf:
+        tf_key = "1minute"
+    elif "5 minute" in tf:
+        tf_key = "5minutes"
+    elif "15 minute" in tf:
+        tf_key = "15minutes"
+    elif "4 hour" in tf:
+        tf_key = "4hours"
+    else:
+        tf_key = "1hour"  # default
 
-    tf_key = timeframe.lower()
-    tf_key = tf_key.replace("minutes", "minute").replace("hours", "hour")
-    tf_key = tf_key.replace(" ", "")  # ← REMOVE ALL SPACES!
-    tf_map = {
-        "1minute": "1minute",
-        "5minute": "5minutes",     # ← YOUR TRAINED FILES USE "5minutes"
-        "15minute": "15minutes",
-        "1hour": "1hour",
-        "4hour": "4hours",
-        "1day": "1day"
-    }
-    final_key = tf_map.get(tf_key, "1hour")  # default to 1h
-    assets = load_model_and_scalers(symbol, final_key)    
+    assets = load_model_and_scalers(symbol, tf_key)
     #assets = load_model_and_scalers(symbol, tf_normalized)
     model = assets["model"]
     scaler = assets["scaler"]

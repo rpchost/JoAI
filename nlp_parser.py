@@ -8,7 +8,7 @@ from models.lstm_model import predict_next_candle
 TOXIC_WORDS = [
     # English
     "fuck", "shit", "bitch", "cunt", "asshole", "motherfucker", "nigger", "faggot", "retard",
-    "pussy", "dick", "cock", "whore", "slut", "bastard", "crap", "damn", "hell",
+    "pussy", "dick", "cock", "whore", "slut", "bastard", "crap", "go to hell",
     # Variations & common bypasses
     "fuk", "fck", "fukin", "f*ck", "sh1t", "b1tch", "a$$", "nigg", "f@g", "r3tard",
     # Aggressive/offensive intent
