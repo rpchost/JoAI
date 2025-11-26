@@ -594,27 +594,22 @@ Want to know more? Ask me about any other indicator! 🚀"""
     
     def make_prediction(self, symbol: str, timeframe: str) -> Dict:
         try:
-            # Remove the entire data calculation section that looks like this:
-            # conn = psycopg2.connect(...)
-            # df = pd.read_sql(...)
-            # df = calculate_indicators(df)
-            # data = df[FEATURE_COLUMNS].tail(60).values.astype(float)
-            
-            # Just call the function directly:
-            result = predict_next_candle(symbol, timeframe)  # Only 2 args!
-            
-            if "error" in result.lower() or "not trained" in result.lower():
-                return {'success': False, 'error': result}
+            # Let lstm_model.py do ALL the work: fetch data, indicators, scaling, prediction, inverse-transform
+            raw_result = predict_next_candle(symbol, timeframe)
 
-            pred_price = float(result.split("$")[1].replace(",", "").split(" ")[0])
-            
-            # Get current price for comparison (if needed)
+            if "Error" in raw_result or "Not enough" in raw_result:
+                return {'success': False, 'error': raw_result}
+
+            # raw_result is already a nicely formatted string like "$95,241.57"
+            pred_close = float(raw_result.replace("$", "").replace(",", "").strip())
+
+            # Fetch current price for realistic open/high/low
             conn = psycopg2.connect(os.getenv("DATABASE_URL") + "?sslmode=require")
             db_tf = {
                 "1 minute": "1minute", "5 minutes": "5minutes", "15 minutes": "15minutes",
                 "1 hour": "1hour", "4 hours": "4hours", "1 day": "1day"
             }.get(timeframe, "1hour")
-            
+
             query = """
                 SELECT close FROM crypto_candles
                 WHERE symbol = %s AND timeframe = %s
@@ -622,19 +617,24 @@ Want to know more? Ask me about any other indicator! 🚀"""
             """
             df = pd.read_sql(query, conn, params=(symbol, db_tf))
             conn.close()
-            
-            current = float(df['close'].iloc[0]) if len(df) > 0 else pred_price
+
+            current_price = float(df['close'].iloc[0]) if len(df) > 0 else pred_close
+
+            # Realistic candle simulation around the LSTM prediction
+            spread = abs(pred_close - current_price) * 0.5
+            high = max(current_price, pred_close) + spread * 0.5
+            low = min(current_price, pred_close) - spread * 0.5
 
             return {
                 'success': True,
                 'symbol': symbol,
                 'timeframe': timeframe,
                 'prediction': {
-                    'open':  round(current, 6),
-                    'high':  round(pred_price * 1.002, 6),
-                    'low':   round(pred_price * 0.998, 6),
-                    'close': round(pred_price, 6),
-                    'volume': 0  # Not predicted
+                    'open':   round(current_price, 6),
+                    'high':   round(high, 6),
+                    'low':    round(low, 6),
+                    'close':  round(pred_close, 6),
+                    'volume': 0
                 },
                 'source': 'LSTM + Pure Pandas Indicators'
             }
