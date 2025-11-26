@@ -7,7 +7,8 @@ import sys
 
 # These must match your fetch_data.py and nlp_parser.py
 COINS = [
-    "BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "SOLUSDT",
+    #"BTCUSDT", "ETHUSDT",
+    "BNBUSDT", "ADAUSDT", "SOLUSDT",
     "XRPUSDT", "DOGEUSDT", "SHIBUSDT", "PEPEUSDT",
     "LINKUSDT", "AVAXUSDT", "TONUSDT"
 ]

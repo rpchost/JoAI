@@ -7,6 +7,8 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from dotenv import load_dotenv
 
+from tensorflow.keras.models import load_model
+
 # Load env
 load_dotenv()
 
@@ -104,56 +106,43 @@ def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
     return df
 
 
-def predict_next_candle(symbol: str, timeframe: str = "1 hour"):
-    symbol = symbol.upper()
+def predict_next_candle(symbol: str, timeframe: str, latest_data: np.ndarray):
+    symbol_clean = symbol.replace("/", "").upper()
+    tf_clean = timeframe.replace(" ", "")  # "1 hour" → "1hour"
+
+    model_path = f"models/saved_model_{symbol_clean}_{tf_clean}.keras"
+    scaler_path = f"models/saved_model_{symbol_clean}_{tf_clean}_scaler.pkl"
+    target_scaler_path = f"models/saved_model_{symbol_clean}_{tf_clean}_target_scaler.pkl"
+
+    # ELITE FIX: Check if model exists → fallback to 1h if not
+    if not os.path.exists(model_path):
+        print(f"MODEL MISSING: {model_path} → falling back to 1h model")
+        fallback_path = f"models/saved_model_{symbol_clean}_1hour.keras"
+        if os.path.exists(fallback_path):
+            model_path = fallback_path
+            scaler_path = fallback_path.replace(".keras", "_scaler.pkl")
+            target_scaler_path = fallback_path.replace(".keras", "_target_scaler.pkl")
+        else:
+            return "Model not trained yet — training in progress. Try 1h timeframe or BTC/ETH for now."
+
+    try:
+        model = load_model(model_path)
+        with open(scaler_path, "rb") as f:
+            scaler = pickle.load(f)
+        with open(target_scaler_path, "rb") as f:
+            target_scaler = pickle.load(f)
+
+        # Your normal prediction logic here
+        scaled = scaler.transform(latest_data)
+        seq = scaled[-60:].reshape(1, 60, -1)
+        pred_scaled = model.predict(seq, verbose=0)
+        pred_price = target_scaler.inverse_transform(pred_scaled)[0][0]
+
+        return f"Predicted next close: ${pred_price:.6f}"
+
+    except Exception as e:
+        return f"Prediction error: {str(e)}"
     
-    # CRITICAL: Convert human timeframe → exact trained model suffix
-    tf = timeframe.lower()
-    if "1 minute" in tf or "1m" in tf:
-        tf_key = "1minute"
-    elif "5 minute" in tf:
-        tf_key = "5minutes"
-    elif "15 minute" in tf:
-        tf_key = "15minutes"
-    elif "4 hour" in tf:
-        tf_key = "4hours"
-    else:
-        tf_key = "1hour"  # default
-
-    assets = load_model_and_scalers(symbol, tf_key)
-    #assets = load_model_and_scalers(symbol, tf_normalized)
-    model = assets["model"]
-    scaler = assets["scaler"]
-    target_scaler = assets["target_scaler"]
-
-    df = get_latest_data(symbol)
-    from utils.indicators import add_technical_indicators
-    df = add_technical_indicators(df)
-
-    latest = df.tail(SEQUENCE_LENGTH)[FEATURE_COLUMNS].values
-    scaled = scaler.transform(latest)
-    X = scaled.reshape((1, SEQUENCE_LENGTH, len(FEATURE_COLUMNS)))
-
-    pred_scaled = model.predict(X, verbose=0)[0][0]
-    pred_close = float(target_scaler.inverse_transform([[pred_scaled]])[0][0])
-    last_close = float(df["close"].iloc[-1])
-
-    change = (pred_close - last_close) / last_close
-    volatility = df["close"].pct_change().std() * 3
-
-    pred_open = last_close
-    pred_high = max(pred_close * (1 + abs(change) * 0.6 + volatility), pred_close, pred_open)
-    pred_low = min(pred_close * (1 - abs(change) * 0.6 - volatility), pred_close, pred_open)
-    pred_volume = float(df["volume"].tail(20).mean())
-
-    return {
-        "open": round(pred_open, 2),
-        "high": round(pred_high, 2),
-        "low": round(pred_low, 2),
-        "close": round(pred_close, 2),
-        "volume": round(pred_volume, 0)
-    }
-
 # Optional: Clear cache (for hot reloads)
 def clear_model_cache():
     global _model_cache
