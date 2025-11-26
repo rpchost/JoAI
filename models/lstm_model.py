@@ -105,40 +105,41 @@ def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
     df = df.iloc[::-1].reset_index(drop=True)  # oldest first
     return df
 
-
 def predict_next_candle(symbol: str, timeframe: str, latest_data: np.ndarray):
     symbol_clean = symbol.replace("/", "").upper()
-    tf_clean = timeframe.replace(" ", "")  # "1 hour" → "1hour"
+    
+    # MAP USER INPUT → DB FORMAT (same as training)
+    TIMEFRAME_TO_DB = {
+        "1 minute":   "1minute",
+        "5 minutes":  "5minutes",
+        "15 minutes": "15minutes",
+        "1 hour":     "1hour",
+        "4 hours":    "4hours",
+        "1 day":      "1day"
+    }
+    db_tf = TIMEFRAME_TO_DB.get(timeframe, "1hour")
 
-    model_path = f"models/saved_model_{symbol_clean}_{tf_clean}.keras"
-    scaler_path = f"models/saved_model_{symbol_clean}_{tf_clean}_scaler.pkl"
-    target_scaler_path = f"models/saved_model_{symbol_clean}_{tf_clean}_target_scaler.pkl"
+    model_path = f"models/saved_model_{symbol_clean}_{db_tf}.keras"
 
-    # ELITE FIX: Check if model exists → fallback to 1h if not
     if not os.path.exists(model_path):
-        print(f"MODEL MISSING: {model_path} → falling back to 1h model")
-        fallback_path = f"models/saved_model_{symbol_clean}_1hour.keras"
-        if os.path.exists(fallback_path):
-            model_path = fallback_path
-            scaler_path = fallback_path.replace(".keras", "_scaler.pkl")
-            target_scaler_path = fallback_path.replace(".keras", "_target_scaler.pkl")
-        else:
-            return "Model not trained yet — training in progress. Try 1h timeframe or BTC/ETH for now."
+        return "Model not trained yet — run: python train_all_models.py"
 
     try:
         model = load_model(model_path)
+        scaler_path = model_path.replace(".keras", "_scaler.pkl")
+        target_scaler_path = model_path.replace(".keras", "_target_scaler.pkl")
+
         with open(scaler_path, "rb") as f:
             scaler = pickle.load(f)
         with open(target_scaler_path, "rb") as f:
             target_scaler = pickle.load(f)
 
-        # Your normal prediction logic here
         scaled = scaler.transform(latest_data)
-        seq = scaled[-60:].reshape(1, 60, -1)
+        seq = scaled[-SEQUENCE_LENGTH:].reshape(1, SEQUENCE_LENGTH, -1)
         pred_scaled = model.predict(seq, verbose=0)
         pred_price = target_scaler.inverse_transform(pred_scaled)[0][0]
 
-        return f"Predicted next close: ${pred_price:.6f}"
+        return f"Predicted next close: ${pred_price:,.6f}"
 
     except Exception as e:
         return f"Prediction error: {str(e)}"

@@ -7,10 +7,11 @@ import sys
 
 # These must match your fetch_data.py and nlp_parser.py
 COINS = [
-    #"BTCUSDT", "ETHUSDT",
-    "BNBUSDT", "ADAUSDT", "SOLUSDT",
-    "XRPUSDT", "DOGEUSDT", "SHIBUSDT", "PEPEUSDT",
-    "LINKUSDT", "AVAXUSDT", "TONUSDT"
+    "BTCUSDT"
+    #"ETHUSDT",
+    #"BNBUSDT", "ADAUSDT", "SOLUSDT",
+    #"XRPUSDT", "DOGEUSDT", "SHIBUSDT", "PEPEUSDT",
+    #"LINKUSDT", "AVAXUSDT", "TONUSDT"
 ]
 
 TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h"]  # matches Binance format

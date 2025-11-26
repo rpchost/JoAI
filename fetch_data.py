@@ -29,9 +29,7 @@ TIMEFRAMES = {
 # ]
 
 SYMBOLS = [
-   "BNB/USDT", "ADA/USDT", "SOL/USDT",
-     "XRP/USDT", "DOGE/USDT", "SHIB/USDT", "PEPE/USDT",
-     "LINK/USDT", "AVAX/USDT", "TON/USDT"
+   "BTC/USDT"
 ]
 
 def get_latest_timestamp_in_db(symbol: str) -> int:
@@ -113,8 +111,24 @@ def fetch_candles(symbol: str, timeframe: str, limit: int = 1000):
 
     return df
 
-def store_candles_postgresql(df):
+def store_candles_postgresql(df, current_timeframe: str):
+    """
+    Store candles with timeframe column
+    current_timeframe: '1m', '5m', '15m', '1h', '4h'
+    """
     import psycopg2
+    
+    # Map ccxt timeframe → DB format
+    tf_map = {
+        '1m': '1minute',
+        '5m': '5minutes',
+        '15m': '15minutes',
+        '1h': '1hour',
+        '4h': '4hours',
+        '1d': '1day'
+    }
+    db_timeframe = tf_map.get(current_timeframe, '1hour')
+
     conn_str = os.getenv("DATABASE_URL")
     if "sslmode" not in conn_str:
         conn_str += "?sslmode=require"
@@ -122,16 +136,19 @@ def store_candles_postgresql(df):
     conn = psycopg2.connect(conn_str)
     cur = conn.cursor()
     
+    # NEW SQL — NOW INCLUDES timeframe
     sql = """
-    INSERT INTO crypto_candles (symbol, timestamp, open, high, low, close, volume)
-    VALUES (%s, %s, %s, %s, %s, %s, %s)
-    ON CONFLICT (symbol, timestamp) DO NOTHING
+    INSERT INTO crypto_candles (symbol, timeframe, timestamp, open, high, low, close, volume)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (symbol, timeframe, timestamp) DO NOTHING
     """
     
     count = 0
     for _, row in df.iterrows():
         cur.execute(sql, (
-            row['symbol'], row['timestamp'],
+            row['symbol'],
+            db_timeframe,                    # ← NEW: timeframe
+            row['timestamp'],
             float(row['open']), float(row['high']), float(row['low']),
             float(row['close']), float(row['volume'])
         ))
@@ -139,7 +156,7 @@ def store_candles_postgresql(df):
     
     conn.commit()
     conn.close()
-    print(f"   Stored {count} rows")
+    print(f"   Stored {count} rows [{row['symbol']} @ {db_timeframe}]")
 
 def populate_all_data():
     total = len(SYMBOLS) * len(TIMEFRAMES)
@@ -157,13 +174,16 @@ def populate_all_data():
             
             try:
                 df = fetch_candles(symbol, tf, limit)
-                store_candles_postgresql(df)
-                print(f"   {symbol} {desc} → FED & STORED\n")
+                if not df.empty:
+                    store_candles_postgresql(df, tf)  # ← NOW WITH timeframe
+                    print(f"   {symbol} {desc} → FED & STORED\n")
+                else:
+                    print(f"   No new data for {symbol} {desc}\n")
             except Exception as e:
                 print(f"   FAILED: {e}\n")
             
             done += 1
-            time.sleep(0.5)  # be gentle
+            time.sleep(0.5)
     
     print("ALL MODELS ARE NOW FULLY FED.")
     print("You may now retrain: python train_one_coin.py")

@@ -51,8 +51,15 @@ if __name__ == "__main__":
 
     symbol = sys.argv[1].upper()
     tf = sys.argv[2]
-    tf_map = {"1m": "1minute", "5m": "5minutes", "15m": "15minutes", "1h": "1hour", "4h": "4hours"}
-    db_tf = tf_map.get(tf, "1hour")
+      # FINAL TIMEFRAME MAPPING — DO NOT EVER CHANGE THIS AGAIN
+    TIMEFRAME_TO_DB = {
+        "1m":  "1minute",
+        "5m":  "5minutes",
+        "15m": "15minutes",
+        "1h":  "1hour",
+        "4h":  "4hours"
+    }
+    db_tf = TIMEFRAME_TO_DB[tf]  # tf comes from train_all_models.py as "1m", "1h", etc.
 
     print(f"Training {symbol} @ {tf} -> DB: {db_tf}")
 
@@ -81,7 +88,10 @@ if __name__ == "__main__":
                   callbacks=[EarlyStopping(patience=10, restore_best_weights=True)], verbose=1)
 
         os.makedirs("models", exist_ok=True)
-        model.save(f"models/saved_model_{symbol}_{tf}.keras")
+        model.save(f"models/saved_model_{symbol}_{db_tf}.keras")
+        pickle.dump(scaler, open(f"models/saved_model_{symbol}_{db_tf}_scaler.pkl", "wb"))
+        pickle.dump(target_scaler, open(f"models/saved_model_{symbol}_{db_tf}_target_scaler.pkl", "wb"))
+        print(f"SAVED → models/saved_model_{symbol}_{db_tf}.keras")
         pickle.dump(scaler, open(f"models/saved_model_{symbol}_{tf}_scaler.pkl", "wb"))
         pickle.dump(target_scaler, open(f"models/saved_model_{symbol}_{tf}_target_scaler.pkl", "wb"))
         print(f"SAVED → models/saved_model_{symbol}_{tf}.keras")

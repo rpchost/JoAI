@@ -600,14 +600,65 @@ Want to know more? Ask me about any other indicator! 🚀"""
                 "1 hour": "1hour", "4 hours": "4hours", "1 day": "1day"
             }.get(timeframe, "1hour")
 
+            # Determine timeframe from timestamp differences (smart auto-detect)
             query = """
-            SELECT open, high, low, close, volume
-            FROM crypto_candles
-            WHERE symbol = %s AND timeframe = %s
-            ORDER BY timestamp DESC
-            LIMIT 300
+                SELECT open, high, low, close, volume, timestamp
+                FROM crypto_candles
+                WHERE symbol = %s
+                ORDER BY timestamp DESC
+                LIMIT 300
             """
-            df = pd.read_sql(query, conn, params=(symbol, db_tf))
+            df = pd.read_sql(query, conn, params=(symbol,))
+            conn.close()
+
+            if len(df) < 10:
+                return {'success': False, 'error': 'Not enough data'}
+
+            # Sort oldest first
+            df = df.sort_values('timestamp').reset_index(drop=True)
+
+            # Auto-detect timeframe by looking at timestamp differences
+            diffs = df['timestamp'].diff()[1:10]  # first 10 diffs
+            minutes = diffs.dt.total_seconds().median() / 60
+
+            if abs(minutes - 1) < 0.5:
+                detected_tf = "1 minute"
+            elif abs(minutes - 5) < 1:
+                detected_tf = "5 minutes"
+            elif abs(minutes - 15) < 2:
+                detected_tf = "15 minutes"
+            elif abs(minutes - 60) < 10:
+                detected_tf = "1 hour"
+            elif abs(minutes - 240) < 20:
+                detected_tf = "4 hours"
+            else:
+                detected_tf = "1 hour"  # fallback
+
+            # Use user-requested timeframe if available, otherwise use detected
+            final_tf = timeframe if timeframe in ["1 minute", "5 minutes", "15 minutes", "1 hour", "4 hours"] else detected_tf
+
+            # Resample to the requested timeframe (this is the key)
+            df.set_index('timestamp', inplace=True)
+            ohlc_dict = {
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }
+            df = df.resample({
+                "1 minute": "1min",
+                "5 minutes": "5min",
+                "15 minutes": "15min",
+                "1 hour": "1H",
+                "4 hours": "4H",
+                "1 day": "1D"
+            }.get(final_tf, "1H")).apply(ohlc_dict).dropna()
+
+            if len(df) < 100:
+                return {'success': False, 'error': f'Not enough {final_tf} candles (need 100+)'}
+
+            df = df.reset_index(drop=True)
             conn.close()
 
             if len(df) < 100:
