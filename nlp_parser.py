@@ -594,127 +594,36 @@ Want to know more? Ask me about any other indicator! 🚀"""
     
     def make_prediction(self, symbol: str, timeframe: str) -> Dict:
         try:
+            # Remove the entire data calculation section that looks like this:
+            # conn = psycopg2.connect(...)
+            # df = pd.read_sql(...)
+            # df = calculate_indicators(df)
+            # data = df[FEATURE_COLUMNS].tail(60).values.astype(float)
+            
+            # Just call the function directly:
+            result = predict_next_candle(symbol, timeframe)  # Only 2 args!
+            
+            if "error" in result.lower() or "not trained" in result.lower():
+                return {'success': False, 'error': result}
+
+            pred_price = float(result.split("$")[1].replace(",", "").split(" ")[0])
+            
+            # Get current price for comparison (if needed)
             conn = psycopg2.connect(os.getenv("DATABASE_URL") + "?sslmode=require")
             db_tf = {
                 "1 minute": "1minute", "5 minutes": "5minutes", "15 minutes": "15minutes",
                 "1 hour": "1hour", "4 hours": "4hours", "1 day": "1day"
             }.get(timeframe, "1hour")
-
-            # Determine timeframe from timestamp differences (smart auto-detect)
+            
             query = """
-                SELECT open, high, low, close, volume, timestamp
-                FROM crypto_candles
-                WHERE symbol = %s
-                ORDER BY timestamp DESC
-                LIMIT 300
+                SELECT close FROM crypto_candles
+                WHERE symbol = %s AND timeframe = %s
+                ORDER BY timestamp DESC LIMIT 1
             """
-            df = pd.read_sql(query, conn, params=(symbol,))
+            df = pd.read_sql(query, conn, params=(symbol, db_tf))
             conn.close()
-
-            if len(df) < 10:
-                return {'success': False, 'error': 'Not enough data'}
-
-            # Sort oldest first
-            df = df.sort_values('timestamp').reset_index(drop=True)
-
-            # Auto-detect timeframe by looking at timestamp differences
-            diffs = df['timestamp'].diff()[1:10]  # first 10 diffs
-            minutes = diffs.dt.total_seconds().median() / 60
-
-            if abs(minutes - 1) < 0.5:
-                detected_tf = "1 minute"
-            elif abs(minutes - 5) < 1:
-                detected_tf = "5 minutes"
-            elif abs(minutes - 15) < 2:
-                detected_tf = "15 minutes"
-            elif abs(minutes - 60) < 10:
-                detected_tf = "1 hour"
-            elif abs(minutes - 240) < 20:
-                detected_tf = "4 hours"
-            else:
-                detected_tf = "1 hour"  # fallback
-
-            # Use user-requested timeframe if available, otherwise use detected
-            final_tf = timeframe if timeframe in ["1 minute", "5 minutes", "15 minutes", "1 hour", "4 hours"] else detected_tf
-
-            # Resample to the requested timeframe (this is the key)
-            df.set_index('timestamp', inplace=True)
-            ohlc_dict = {
-                'open': 'first',
-                'high': 'max',
-                'low': 'min',
-                'close': 'last',
-                'volume': 'sum'
-            }
-            df = df.resample({
-                "1 minute": "1min",
-                "5 minutes": "5min",
-                "15 minutes": "15min",
-                "1 hour": "1H",
-                "4 hours": "4H",
-                "1 day": "1D"
-            }.get(final_tf, "1H")).apply(ohlc_dict).dropna()
-
-            if len(df) < 100:
-                return {'success': False, 'error': f'Not enough {final_tf} candles (need 100+)'}
-
-            df = df.reset_index(drop=True)
-            conn.close()
-
-            if len(df) < 100:
-                return {'success': False, 'error': 'Not enough data'}
-
-            df = df.iloc[::-1].reset_index(drop=True)
-            c = df['close'].astype(float)
-            h = df['high'].astype(float)
-            l = df['low'].astype(float)
-            v = df['volume'].astype(float)
-
-            # === PURE PANDAS INDICATORS (identical to TA-Lib) ===
-            df['sma_20']      = c.rolling(20).mean()
-            df['sma_50']      = c.rolling(50).mean()
-            df['ema_12']      = c.ewm(span=12, adjust=False).mean()
-            df['ema_26']      = c.ewm(span=26, adjust=False).mean()
             
-            delta = c.diff()
-            up = delta.clip(lower=0)
-            down = (-delta).clip(lower=0)
-            roll_up = up.ewm(com=13, adjust=False).mean()
-            roll_down = down.ewm(com=13, adjust=False).mean()
-            rs = roll_up / roll_down
-            df['rsi'] = 100 - (100 / (1 + rs))
-            
-            df['macd']        = df['ema_12'] - df['ema_26']
-            df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-            df['macd_hist']   = df['macd'] - df['macd_signal']
-            
-            std20 = c.rolling(20).std()
-            df['bb_middle']   = df['sma_20']
-            df['bb_upper']    = df['sma_20'] + 2 * std20
-            df['bb_lower']    = df['sma_20'] - 2 * std20
-            
-            tr = pd.DataFrame(index=df.index)
-            tr['h_l']   = h - l
-            tr['h_pc']  = abs(h - c.shift())
-            tr['l_pc']  = abs(l - c.shift())
-            tr['tr']    = tr.max(axis=1)
-            df['atr']   = tr['tr'].rolling(14).mean()
-            
-            df['stoch_k'] = 100 * (c - l.rolling(14).min()) / (h.rolling(14).max() - l.rolling(14).min() + 1e-8)
-            df['stoch_d'] = df['stoch_k'].rolling(3).mean()
-            df['willr']   = -100 * (h.rolling(14).max() - c) / (h.rolling(14).max() - l.rolling(14).min() + 1e-8)
-            df['volume_sma'] = v.rolling(20).mean()
-            df['roc']     = c.pct_change(10) * 100
-
-            df = df.fillna(method='bfill').fillna(0)
-            data = df[FEATURE_COLUMNS].tail(60).values.astype(float)
-
-            result = predict_next_candle(symbol, timeframe, data)
-            if "error" in result.lower() or "not trained" in result.lower():
-                return {'success': False, 'error': result}
-
-            pred_price = float(result.split("$")[1].replace(",", "").split(" ")[0])
-            current = c.iloc[-1]
+            current = float(df['close'].iloc[0]) if len(df) > 0 else pred_price
 
             return {
                 'success': True,
@@ -725,14 +634,14 @@ Want to know more? Ask me about any other indicator! 🚀"""
                     'high':  round(pred_price * 1.002, 6),
                     'low':   round(pred_price * 0.998, 6),
                     'close': round(pred_price, 6),
-                    'volume': int(v.mean() * 1.1)
+                    'volume': 0  # Not predicted
                 },
-                'source': 'LSTM + Pure Pandas Indicators (TA-Lib free)'
+                'source': 'LSTM + Pure Pandas Indicators'
             }
 
         except Exception as e:
             return {'success': False, 'error': f"Predict error: {str(e)}"}
-         
+    
     def process_query(self, query: str) -> Dict:
         """Main processing pipeline with conversational AI"""
 
