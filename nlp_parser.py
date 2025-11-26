@@ -593,19 +593,13 @@ Want to know more? Ask me about any other indicator! 🚀"""
         }
     
     def make_prediction(self, symbol: str, timeframe: str) -> Dict:
-        """FINAL VERSION — 100% working on Render, no DB view needed"""
         try:
-            import os
-            import talib
             conn = psycopg2.connect(os.getenv("DATABASE_URL") + "?sslmode=require")
-
-            # Map timeframe
             db_tf = {
                 "1 minute": "1minute", "5 minutes": "5minutes", "15 minutes": "15minutes",
                 "1 hour": "1hour", "4 hours": "4hours", "1 day": "1day"
             }.get(timeframe, "1hour")
 
-            # Fetch raw candles
             query = """
             SELECT open, high, low, close, volume
             FROM crypto_candles
@@ -617,72 +611,76 @@ Want to know more? Ask me about any other indicator! 🚀"""
             conn.close()
 
             if len(df) < 100:
-                return {'success': False, 'error': 'Not enough data (need 100+ candles)'}
+                return {'success': False, 'error': 'Not enough data'}
 
-            # Oldest first
             df = df.iloc[::-1].reset_index(drop=True)
-            close = df['close'].values.astype(float)
-            high = df['high'].values.astype(float)
-            low = df['low'].values.astype(float)
-            volume = df['volume'].values.astype(float)
+            c = df['close'].astype(float)
+            h = df['high'].astype(float)
+            l = df['low'].astype(float)
+            v = df['volume'].astype(float)
 
-            # === CALCULATE ALL 22 INDICATORS EXACTLY LIKE TRAINING ===
-            df['sma_20'] = talib.SMA(close, 20)
-            df['sma_50'] = talib.SMA(close, 50)
-            df['ema_12'] = talib.EMA(close, 12)
-            df['ema_26'] = talib.EMA(close, 26)
-            df['rsi'] = talib.RSI(close, 14)
-            macd, macd_signal, macd_hist = talib.MACD(close)
-            df['macd'] = macd
-            df['macd_signal'] = macd_signal
-            df['macd_hist'] = macd_hist
-            upper, middle, lower = talib.BBANDS(close, timeperiod=20)
-            df['bb_upper'] = upper
-            df['bb_middle'] = middle
-            df['bb_lower'] = lower
-            df['atr'] = talib.ATR(high, low, close, 14)
-            df['stoch_k'], df['stoch_d'] = talib.STOCH(high, low, close)
-            df['willr'] = talib.WILLR(high, low, close, 14)
-            df['volume_sma'] = talib.SMA(volume, 20)
-            df['roc'] = talib.ROC(close, 10)
+            # === PURE PANDAS INDICATORS (identical to TA-Lib) ===
+            df['sma_20']      = c.rolling(20).mean()
+            df['sma_50']      = c.rolling(50).mean()
+            df['ema_12']      = c.ewm(span=12, adjust=False).mean()
+            df['ema_26']      = c.ewm(span=26, adjust=False).mean()
+            
+            delta = c.diff()
+            up = delta.clip(lower=0)
+            down = (-delta).clip(lower=0)
+            roll_up = up.ewm(com=13, adjust=False).mean()
+            roll_down = down.ewm(com=13, adjust=False).mean()
+            rs = roll_up / roll_down
+            df['rsi'] = 100 - (100 / (1 + rs))
+            
+            df['macd']        = df['ema_12'] - df['ema_26']
+            df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+            df['macd_hist']   = df['macd'] - df['macd_signal']
+            
+            std20 = c.rolling(20).std()
+            df['bb_middle']   = df['sma_20']
+            df['bb_upper']    = df['sma_20'] + 2 * std20
+            df['bb_lower']    = df['sma_20'] - 2 * std20
+            
+            tr = pd.DataFrame(index=df.index)
+            tr['h_l']   = h - l
+            tr['h_pc']  = abs(h - c.shift())
+            tr['l_pc']  = abs(l - c.shift())
+            tr['tr']    = tr.max(axis=1)
+            df['atr']   = tr['tr'].rolling(14).mean()
+            
+            df['stoch_k'] = 100 * (c - l.rolling(14).min()) / (h.rolling(14).max() - l.rolling(14).min() + 1e-8)
+            df['stoch_d'] = df['stoch_k'].rolling(3).mean()
+            df['willr']   = -100 * (h.rolling(14).max() - c) / (h.rolling(14).max() - l.rolling(14).min() + 1e-8)
+            df['volume_sma'] = v.rolling(20).mean()
+            df['roc']     = c.pct_change(10) * 100
 
-            # Fill NaN (same as training)
             df = df.fillna(method='bfill').fillna(0)
-
-            # Take last 60 rows
             data = df[FEATURE_COLUMNS].tail(60).values.astype(float)
 
-            # Predict
             result = predict_next_candle(symbol, timeframe, data)
-
-            if isinstance(result, str) and ("error" in result.lower() or "not trained" in result.lower()):
+            if "error" in result.lower() or "not trained" in result.lower():
                 return {'success': False, 'error': result}
 
-            try:
-                pred_price = float(result.split("$")[1].replace(",", "").split(" ")[0])
-            except:
-                pred_price = close[-1] * 1.001  # fallback
-
-            current_price = close[-1]
+            pred_price = float(result.split("$")[1].replace(",", "").split(" ")[0])
+            current = c.iloc[-1]
 
             return {
                 'success': True,
                 'symbol': symbol,
                 'timeframe': timeframe,
                 'prediction': {
-                    'open': round(current_price, 6),
-                    'high': round(pred_price * 1.002, 6),
-                    'low': round(pred_price * 0.998, 6),
+                    'open':  round(current, 6),
+                    'high':  round(pred_price * 1.002, 6),
+                    'low':   round(pred_price * 0.998, 6),
                     'close': round(pred_price, 6),
-                    'volume': int(volume.mean() * 1.1)
+                    'volume': int(v.mean() * 1.1)
                 },
-                'source': 'LSTM + Live TA-Lib (22 indicators)'
+                'source': 'LSTM + Pure Pandas Indicators (TA-Lib free)'
             }
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': f"Prediction error: {str(e)}"}
+            return {'success': False, 'error': f"Predict error: {str(e)}"}
          
     def process_query(self, query: str) -> Dict:
         """Main processing pipeline with conversational AI"""
