@@ -22,7 +22,7 @@ app_env = os.getenv('APP_ENV')  # Check system env var first (set by Render)
 # if app_env == 'production':
 #     load_dotenv(dotenv_path='.env.production')
 # else:
-load_dotenv(dotenv_path='.env')  # Default to development
+#load_dotenv(dotenv_path='.env')  # Default to development
 
 # Database configuration
 def get_db_config():

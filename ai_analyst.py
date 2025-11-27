@@ -3,15 +3,16 @@ import os
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 import requests
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 from sqlalchemy import create_engine
 import json
 
-load_dotenv()
+#load_dotenv()
 
 # === CONFIG ===
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
+print(f"Groq key loaded: {'Yes' if GROQ_API_KEY else 'No'} (length: {len(GROQ_API_KEY) if GROQ_API_KEY else 0})")
 
 # === FREE ON-CHAIN DATA SOURCES (WORKING 2025) ===
 def get_blockchain_info():
