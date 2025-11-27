@@ -204,16 +204,19 @@ def populate_multiple_symbols():
     print("="*70)
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("mode", nargs="?", default="all", help="'all' = fetch all timeframes, '1h' = only 1h")
-    args = parser.parse_args()
+    populate_multiple_symbols()
     
-    if args.mode == "all":
-        #populate_all_data()
-        populate_multiple_symbols()
-    else:
-        print("Run: python fetch_data.py all")
+# if __name__ == "__main__":
+#     import argparse
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("mode", nargs="?", default="all", help="'all' = fetch all timeframes, '1h' = only 1h")
+#     args = parser.parse_args()
+    
+#     if args.mode == "all":
+#         #populate_all_data()
+#         populate_multiple_symbols()
+#     else:
+#         print("Run: python fetch_data.py all")
 
 # import ccxt
 # import pandas as pd
