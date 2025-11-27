@@ -18,3 +18,27 @@ services:
         fromDatabase:
           name: joai_db1
           property: connectionString
+
+# Cron Job 1: Update data every 30 minutes
+  - type: cron
+    name: joai-data-updater-30min
+    env: python
+    region: oregon
+    schedule: "*/30 * * * *"  # Every 30 minutes
+    buildCommand: pip install -r requirements.txt
+    startCommand: python update_data_cron.py
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+
+  # Cron Job 2: Update data every hour (backup/alternative)
+  - type: cron
+    name: joai-data-updater-hourly
+    env: python
+    region: oregon
+    schedule: "0 * * * *"  # Every hour at :00
+    buildCommand: pip install -r requirements.txt
+    startCommand: python update_data_cron.py
+    envVars:
+      - key: DATABASE_URL
+        sync: false
