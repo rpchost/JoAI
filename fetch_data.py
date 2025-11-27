@@ -173,35 +173,35 @@ def populate_all_data():
     print("You may now retrain: python train_one_coin.py")
 
 def populate_multiple_symbols():
-    total = len(SYMBOLS) * len(TIMEFRAMES)
+    """Main function used by GitHub Actions and local updater"""
+    print("JOAI DATA UPDATE VIA GITHUB ACTIONS / LOCAL SCRIPT")
+    print(f"Started at: {datetime.now()}")
+    print(f"Updating {len(SYMBOLS)} coins × {len(TIMEFRAMES)} timeframes")
+    
+    total = len(SYMBOLS) * len(TIMEFRAMES.keys())
     done = 0
-    
-    print("JOAI DATA HARVESTER ACTIVATED — Feeding all 60 models (12 coins × 5 timeframes)")
-    print(f"Total candles to fetch: ~100,000+\n")
-    
+
     for symbol in SYMBOLS:
-        for tf, config in TIMEFRAMES.items():
-            desc = config["desc"]
-            limit = config["limit"]
-            
-            print(f"[{done+1}/{total}] Fetching {symbol} @ {desc} ({limit} candles)...")
-            
-            try:
-                df = fetch_candles(symbol, tf, limit)
-                if not df.empty:
-                    store_candles_postgresql(df, tf)  # ← NOW WITH timeframe
-                    print(f"   {symbol} {desc} → FED & STORED\n")
-                else:
-                    print(f"   No new data for {symbol} {desc}\n")
-            except Exception as e:
-                print(f"   FAILED: {e}\n")
+        for tf_key, config in TIMEFRAMES.items():
+            tf = tf_key
+            limit = config["limit"] if isinstance(config, dict) else config
             
             done += 1
-            time.sleep(0.5)
-    
-    print("ALL MODELS ARE NOW FULLY FED.")
-    print("You may now retrain: python train_one_coin.py")
+            print(f"[{done:2d}/{total}] Fetching {symbol} @ {tf} ({limit} candles)... ", end="")
+            
+            df = fetch_candles(symbol, tf, limit)
+            if not df.empty:
+                store_candles_postgresql(df, tf)
+                print(f"STORED {len(df)} rows")
+            else:
+                print("No new data")
+            
+            time.sleep(0.35)  # Be nice to Binance
 
+    print("="*70)
+    print("ALL DATA SUCCESSFULLY UPDATED")
+    print(f"Completed at: {datetime.now()}")
+    print("="*70)
 
 if __name__ == "__main__":
     import argparse
