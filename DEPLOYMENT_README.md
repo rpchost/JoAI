@@ -50,7 +50,7 @@ curl -X POST https://rpchost.pythonanywhere.com/nlp_predict \
 ```bash
 curl -X POST https://rpchost.pythonanywhere.com/predict \
   -H "Content-Type: application/json" \
-  -d '{"symbol": "BTCUSDT", "timeframe": "1h"}'
+  -d '{"symbol": "BTCUSD", "timeframe": "1h"}'
 ```
 
 ### View Logs

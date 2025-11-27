@@ -7,18 +7,18 @@ from models.lstm_model import LSTMCryptoPredictor
 
 # MUST match your symbol_map in nlp_parser.py and fetch_data.py
 SUPPORTED_COINS = [
-    "BTCUSDT",
-    "ETHUSDT",
-    "BNBUSDT",
-    "ADAUSDT",
-    "SOLUSDT",
-    "XRPUSDT",
-    "DOGEUSDT",
-    "SHIBUSDT",
-    "PEPEUSDT",
-    "LINKUSDT",
-    "AVAXUSDT",
-    "TONUSDT"
+    "BTCUSD",
+    "ETHUSD",
+    "BNBUSD",
+    "ADAUSD",
+    "SOLUSD",
+    "XRPUSD",
+    "DOGEUSD",
+    "SHIBUSD",
+    "PEPEUSD",
+    "LINKUSD",
+    "AVAXUSD",
+    "TONUSD"
 ]
 
 def train_all_models():

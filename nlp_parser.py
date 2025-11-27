@@ -22,11 +22,11 @@ TOXIC_WORDS = [
 
   # 1. DYNAMIC COIN LIST (add this near the top)
 COINS_READABLE = {
-        'BTCUSDT': 'Bitcoin (BTC)', 'ETHUSDT': 'Ethereum (ETH)', 'BNBUSDT': 'BNB',
-        'ADAUSDT': 'Cardano (ADA)', 'SOLUSDT': 'Solana (SOL)', 'XRPUSDT': 'XRP',
-        'DOGEUSDT': 'Dogecoin (DOGE)', 'SHIBUSDT': 'Shiba Inu (SHIB)',
-        'PEPEUSDT': 'Pepe (PEPE)', 'LINKUSDT': 'Chainlink (LINK)',
-        'AVAXUSDT': 'Avalanche (AVAX)', 'TONUSDT': 'Toncoin (TON)'
+        'BTCUSD': 'Bitcoin (BTC)', 'ETHUSD': 'Ethereum (ETH)', 'BNBUSD': 'BNB',
+        'ADAUSD': 'Cardano (ADA)', 'SOLUSD': 'Solana (SOL)', 'XRPUSD': 'XRP',
+        'DOGEUSD': 'Dogecoin (DOGE)', 'SHIBUSD': 'Shiba Inu (SHIB)',
+        'PEPEUSD': 'Pepe (PEPE)', 'LINKUSD': 'Chainlink (LINK)',
+        'AVAXUSD': 'Avalanche (AVAX)', 'TONUSD': 'Toncoin (TON)'
     }
 
 ALL_COINS_STR = " • ".join([name.split('(')[0].strip() for name in COINS_READABLE.values()])
@@ -50,18 +50,18 @@ class JoAIConversationNLP:
         
         # Symbol mappings
         self.symbol_map = {
-            'btc': 'BTCUSDT', 'bitcoin': 'BTCUSDT', 'btcusdt': 'BTCUSDT',
-            'eth': 'ETHUSDT', 'ethereum': 'ETHUSDT', 'ethusdt': 'ETHUSDT',
-            'bnb': 'BNBUSDT', 'binance': 'BNBUSDT', 'bnbusdt': 'BNBUSDT',
-            'ada': 'ADAUSDT', 'cardano': 'ADAUSDT', 'adausdt': 'ADAUSDT',
-            'sol': 'SOLUSDT', 'solana': 'SOLUSDT', 'solusdt': 'SOLUSDT',
-            'xrp': 'XRPUSDT', 'ripple': 'XRPUSDT',
-            'doge': 'DOGEUSDT', 'dogecoin': 'DOGEUSDT', 'dogeusdt': 'DOGEUSDT',
-            'shib': 'SHIBUSDT', 'shiba': 'SHIBUSDT', 'shibainu': 'SHIBUSDT',
-            'pepe': 'PEPEUSDT', 'pepeusdt': 'PEPEUSDT',
-            'link': 'LINKUSDT', 'chainlink': 'LINKUSDT',
-            'avax': 'AVAXUSDT', 'avalanche': 'AVAXUSDT',
-            'ton': 'TONUSDT', 'toncoin': 'TONUSDT'
+            'btc': 'BTCUSD', 'bitcoin': 'BTCUSD', 'btcusd': 'BTCUSD',
+            'eth': 'ETHUSD', 'ethereum': 'ETHUSD', 'ethusd': 'ETHUSD',
+            'bnb': 'BNBUSD', 'binance': 'BNBUSD', 'bnbusd': 'BNBUSD',
+            'ada': 'ADAUSD', 'cardano': 'ADAUSD', 'adausd': 'ADAUSD',
+            'sol': 'SOLUSD', 'solana': 'SOLUSD', 'solusd': 'SOLUSD',
+            'xrp': 'XRPUSD', 'ripple': 'XRPUSD',
+            'doge': 'DOGEUSD', 'dogecoin': 'DOGEUSD', 'dogeusd': 'DOGEUSD',
+            'shib': 'SHIBUSD', 'shiba': 'SHIBUSD', 'shibainu': 'SHIBUSD',
+            'pepe': 'PEPEUSD', 'pepeusd': 'PEPEUSD',
+            'link': 'LINKUSD', 'chainlink': 'LINKUSD',
+            'avax': 'AVAXUSD', 'avalanche': 'AVAXUSD',
+            'ton': 'TONUSD', 'toncoin': 'TONUSD'
         }
         
         # Timeframe patterns

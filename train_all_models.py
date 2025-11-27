@@ -8,18 +8,18 @@ from datetime import datetime
 
 # All 12 coins (uncomment to train full suite)
 COINS = [
-    "BTCUSDT",
-    # "ETHUSDT",
-    # "BNBUSDT",
-    # "ADAUSDT",
-    # "SOLUSDT",
-    # "XRPUSDT",
-    # "DOGEUSDT",
-    # "SHIBUSDT",
-    # "PEPEUSDT",
-    # "LINKUSDT",
-    # "AVAXUSDT",
-    # "TONUSDT"
+    "BTCUSD",
+    # "ETHUSD",
+    # "BNBUSD",
+    # "ADAUSD",
+    # "SOLUSD",
+    # "XRPUSD",
+    # "DOGEUSD",
+    # "SHIBUSD",
+    # "PEPEUSD",
+    # "LINKUSD",
+    # "AVAXUSD",
+    # "TONUSD"
 ]
 
 # All timeframes

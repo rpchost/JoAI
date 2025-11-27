@@ -107,7 +107,7 @@ def create_sequences(data, seq_length):
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: python train_one_coin.py BTCUSDT 1h")
+        print("Usage: python train_one_coin.py BTCUSD 1h")
         sys.exit(1)
 
     symbol = sys.argv[1].upper()

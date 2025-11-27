@@ -104,7 +104,7 @@ def get_latest_data(symbol: str, limit: int = SEQUENCE_LENGTH + 20):
     return df
 
 
-def predict_next_candle(symbol: str = "BTCUSDT"):
+def predict_next_candle(symbol: str = "BTCUSD"):
     """
     MAIN PREDICTION FUNCTION — CLEAN, SAFE, NO FALLBACKS
     """

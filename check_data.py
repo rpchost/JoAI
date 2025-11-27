@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 COINS = [
-    "BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "SOLUSDT", "XRPUSDT",
-    "DOGEUSDT", "SHIBUSDT", "PEPEUSDT", "LINKUSDT", "AVAXUSDT", "TONUSDT"
+    "BTCUSD", "ETHUSD", "BNBUSD", "ADAUSD", "SOLUSD", "XRPUSD",
+    "DOGEUSD", "SHIBUSD", "PEPEUSD", "LINKUSD", "AVAXUSD", "TONUSD"
 ]
 
 TIMEFRAMES = ["1minute", "5minutes", "15minutes", "1hour", "4hours"]

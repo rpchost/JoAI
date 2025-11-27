@@ -69,7 +69,7 @@ app = FastAPI(
 )
 
 class PredictRequest(BaseModel):
-    symbol: str = "BTCUSDT"
+    symbol: str = "BTCUSD"
     timeframe: str = "1h"
 
 class NLPRequest(BaseModel):
@@ -994,13 +994,13 @@ def test_coingecko_and_populate():
         connection = psycopg2.connect(db_url, connect_timeout=10)
         
         with connection.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM crypto_candles WHERE symbol = 'BTCUSDT'")
+            cursor.execute("SELECT COUNT(*) FROM crypto_candles WHERE symbol = 'BTCUSD'")
             count = cursor.fetchone()[0]
             
             cursor.execute("""
                 SELECT symbol, timestamp, open, high, low, close, volume 
                 FROM crypto_candles 
-                WHERE symbol = 'BTCUSDT' 
+                WHERE symbol = 'BTCUSD' 
                 ORDER BY timestamp DESC 
                 LIMIT 5
             """)
