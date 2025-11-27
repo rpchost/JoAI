@@ -34,7 +34,7 @@ def fetch_ohlcv_direct(symbol: str, timeframe: str, limit: int):
     url = "https://api.binance.us/api/v3/klines"
     params = {'symbol': symbol, 'interval': timeframe, 'limit': limit}
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = requests.get(url, params=params, timeout=10)
         if response.status_code == 400:
             print(f"  Symbol {symbol} not supported on Binance.US")
             return pd.DataFrame()
@@ -53,8 +53,11 @@ def fetch_ohlcv_direct(symbol: str, timeframe: str, limit: int):
         df['symbol'] = symbol
         print(f"  GOT {len(df)} candles | {df['timestamp'].iloc[0].strftime('%Y-%m-%d %H:%M')} → {df['timestamp'].iloc[-1].strftime('%H:%M')}")
         return df
+    except requests.exceptions.Timeout:
+        print(f"  TIMEOUT for {symbol} {timeframe} — skipping")
+        return pd.DataFrame()
     except Exception as e:
-        print(f"  ERROR: {e}")
+        print(f"  ERROR {symbol} {timeframe}: {e}")
         return pd.DataFrame()
 
 def store_candles_postgresql(df, tf: str):
