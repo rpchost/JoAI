@@ -59,11 +59,15 @@ def get_latest_timestamp_in_db(symbol: str) -> int:
 
 
 def fetch_candles(symbol: str, timeframe: str, limit: int = 1000):
-    exchange = ccxt.binance({
-        'enableRateLimit': True,
-        'options': {'defaultType': 'spot'},
-        'timeout': 30000,
-    })
+    # exchange = ccxt.binance({
+    #     'enableRateLimit': True,
+    #     'options': {'defaultType': 'spot'},
+    #     'timeout': 30000,
+    # })
+    exchange = ccxt.binanceus({   # ← CHANGE TO binanceus
+    'enableRateLimit': True,
+    'timeout': 30000,
+})
 
     symbol_clean = symbol.replace("/", "")
     print(f"Fetching latest {limit} {timeframe} candles for {symbol}...")
