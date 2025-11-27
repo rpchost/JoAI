@@ -104,15 +104,19 @@ def predict_next_candle(symbol: str, timeframe: str):
     if not db_url:
         return "Error: DATABASE_URL not configured"
     
-    conn = psycopg2.connect(db_url + "?sslmode=require")
+    #conn = psycopg2.connect(db_url + "?sslmode=require")
     query = """
         SELECT open, high, low, close, volume
         FROM crypto_candles
         WHERE symbol = %s AND timeframe = %s
         ORDER BY timestamp DESC LIMIT 300
     """
-    df = pd.read_sql(query, conn, params=(symbol, db_tf))
-    conn.close()
+    #df = pd.read_sql(query, conn, params=(symbol, db_tf))
+    from sqlalchemy import create_engine
+    engine = create_engine(db_url + "?sslmode=require")
+    df = pd.read_sql(query, engine, params=(symbol, db_tf))
+
+    #conn.close()
 
     if len(df) < 100:
         return "Not enough data"

@@ -37,3 +37,6 @@ jobs:
 
       - name: Done
         run: echo "BTCUSD data updated successfully at $(date)"
+
+      - name: Update on-chain data & answer questions
+        run: python ai_analyst.py

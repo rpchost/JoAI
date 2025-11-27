@@ -14,6 +14,7 @@ from questdb.ingress import Sender, TimestampNanos
 import os
 from dotenv import load_dotenv
 import psycopg2
+from ai_analyst import ask_joai
 
 # Load environment variables from appropriate .env file
 # Check system environment first (for Render deployment), then local .env files
@@ -975,6 +976,60 @@ def test_binance_connection():
             "success": False,
             "message": f"Failed to connect to Binance: {str(e)}"
         }
+    
+@app.post("/ai_analyst")
+def ai_analyst_endpoint(request: dict):
+    """
+    AI-powered Bitcoin analysis using on-chain data + LSTM predictions
+    
+    Example request:
+    {
+        "question": "Should I buy Bitcoin now?"
+    }
+    """
+    try:
+        question = request.get("question", "What's the current Bitcoin trend?")
+        answer = ask_joai(question)
+        
+        return {
+            "success": True,
+            "question": question,
+            "answer": answer,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/market_sentiment")
+def get_market_sentiment():
+    """Quick sentiment check without AI processing"""
+    from ai_analyst import get_onchain_data, get_price_data
+    
+    try:
+        price_df = get_price_data()
+        onchain = get_onchain_data()
+        
+        if price_df.empty:
+            return {"error": "No price data available"}
+        
+        current_price = float(price_df['close'].iloc[-1])
+        
+        return {
+            "success": True,
+            "price": current_price,
+            "fear_greed": onchain.get("fear_greed", 50),
+            "sentiment": onchain.get("classification", "Neutral"),
+            "exchange_reserves_trend": onchain.get("trend", "unknown"),
+            "mempool_tx": onchain.get("unconfirmed_tx", 0),
+            "volume_24h": onchain.get("total_volume_24h", 0),
+            "price_change_24h": onchain.get("price_change_24h", 0),
+            "active_addresses": onchain.get("active_addresses_24h", 0)
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
     
 @app.get("/test_coingecko")
 def test_coingecko_and_populate():
