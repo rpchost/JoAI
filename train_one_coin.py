@@ -1,4 +1,4 @@
-# train_one_coin.py — WITH .ENV LOADING
+# train_one_coin.py — FIXED SCALER VERSION
 
 import sys
 import os
@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
 
-# Load environment variables from .env file
 load_dotenv()
 
 SEQUENCE_LENGTH = 60
@@ -74,10 +73,9 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def get_data(symbol: str, db_tf: str):
-    # Safe DATABASE_URL retrieval
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
-        raise ValueError("DATABASE_URL environment variable not set! Create a .env file or set it manually.")
+        raise ValueError("DATABASE_URL environment variable not set!")
     
     conn = psycopg2.connect(db_url + "?sslmode=require")
     query = """
@@ -97,10 +95,14 @@ def get_data(symbol: str, db_tf: str):
     return df[FEATURE_COLUMNS].values.astype(float)
 
 def create_sequences(data, seq_length):
+    """
+    Creates sequences for LSTM training
+    Returns: X (scaled features), y (ALSO SCALED close prices)
+    """
     X, y = [], []
     for i in range(seq_length, len(data)):
-        X.append(data[i-seq_length:i])
-        y.append(data[i, 3])  # close price
+        X.append(data[i-seq_length:i])  # All 22 features (scaled)
+        y.append(data[i, 3])  # Close price column (ALSO SCALED)
     return np.array(X), np.array(y)
 
 if __name__ == "__main__":
@@ -121,37 +123,52 @@ if __name__ == "__main__":
     print(f"Current working directory: {os.getcwd()}")
     
     try:
+        # Get raw data
         data = get_data(symbol, db_tf)
-        print(f"✓ Loaded {len(data)} rows with indicators")
+        print(f"[OK] Loaded {len(data)} rows with indicators")
 
+        # Scale ALL features (including close price)
         scaler = MinMaxScaler()
-        scaled = scaler.fit_transform(data)
-       
-        X, y = create_sequences(scaled, SEQUENCE_LENGTH)
-        y = y.copy()  # y is now raw close prices (no scaling!)
-        target_scaler = None  # we will save None or a dummy
+        scaled_data = scaler.fit_transform(data)
+        
+        # Extract JUST the close price column for target scaler
+        # Column 3 is 'close' in FEATURE_COLUMNS
+        close_prices = data[:, 3].reshape(-1, 1)
+        target_scaler = MinMaxScaler()
+        target_scaler.fit(close_prices)  # Fit on UNSCALED close prices
+        
+        print(f"[OK] Feature scaler range: {scaler.data_min_[3]:.2f} - {scaler.data_max_[3]:.2f}")
+        print(f"[OK] Target scaler range: {target_scaler.data_min_[0]:.2f} - {target_scaler.data_max_[0]:.2f}")
 
-        print(f"✓ Created {len(X)} training sequences")
+        # Create sequences (using scaled data)
+        X, y = create_sequences(scaled_data, SEQUENCE_LENGTH)
+        print(f"[OK] Created {len(X)} training sequences")
+        print(f"[OK] Target values are scaled: min={y.min():.4f}, max={y.max():.4f}")
 
+        # Train/validation split
         split = int(0.8 * len(X))
+        
+        # Build model
         model = Sequential([
             LSTM(128, return_sequences=True, input_shape=(SEQUENCE_LENGTH, len(FEATURE_COLUMNS))),
             Dropout(0.2),
             LSTM(64),
             Dropout(0.2),
             Dense(32, activation='relu'),
-            Dense(1)
+            Dense(1)  # Outputs scaled value
         ])
         model.compile('adam', 'mse')
-        print(f"✓ Model compiled, training on {split} samples...")
+        print(f"[OK] Model compiled, training on {split} samples...")
         
-        model.fit(X[:split], y[:split], validation_data=(X[split:], y[split:]),
+        # Train
+        model.fit(X[:split], y[:split], 
+                  validation_data=(X[split:], y[split:]),
                   epochs=200, batch_size=32,
                   callbacks=[EarlyStopping(patience=10, restore_best_weights=True)], 
                   verbose=0)
-        print(f"✓ Training completed")
+        print(f"[OK] Training completed")
 
-        # Absolute path resolution
+        # Save everything
         script_dir = os.path.dirname(os.path.abspath(__file__))
         models_dir = os.path.join(script_dir, "models")
         os.makedirs(models_dir, exist_ok=True)
@@ -170,17 +187,17 @@ if __name__ == "__main__":
             pickle.dump(scaler, f)
         
         with open(target_scaler_path, "wb") as f:
-            pickle.dump(target_scaler, f)
+            pickle.dump(target_scaler, f)  # Save REAL scaler
         
-        # Verify all files
-        model_size = os.path.getsize(model_path) / 1024  # KB
+        # Verify
+        model_size = os.path.getsize(model_path) / 1024
         scaler_size = os.path.getsize(scaler_path) / 1024
         target_size = os.path.getsize(target_scaler_path) / 1024
         
-        print(f"✓ Model saved: {model_size:.1f} KB")
-        print(f"✓ Scaler saved: {scaler_size:.1f} KB")
-        print(f"✓ Target scaler saved: {target_size:.1f} KB")
-        print(f"SUCCESS → {model_path}")
+        print(f"[OK] Model saved: {model_size:.1f} KB")
+        print(f"[OK] Scaler saved: {scaler_size:.1f} KB")
+        print(f"[OK] Target scaler saved: {target_size:.1f} KB")
+        print(f"SUCCESS -> {model_path}")
 
     except Exception as e:
         print(f"FAILED: {e}")
