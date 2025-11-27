@@ -172,6 +172,37 @@ def populate_all_data():
     print("ALL MODELS ARE NOW FULLY FED.")
     print("You may now retrain: python train_one_coin.py")
 
+def populate_multiple_symbols():
+    total = len(SYMBOLS) * len(TIMEFRAMES)
+    done = 0
+    
+    print("JOAI DATA HARVESTER ACTIVATED — Feeding all 60 models (12 coins × 5 timeframes)")
+    print(f"Total candles to fetch: ~100,000+\n")
+    
+    for symbol in SYMBOLS:
+        for tf, config in TIMEFRAMES.items():
+            desc = config["desc"]
+            limit = config["limit"]
+            
+            print(f"[{done+1}/{total}] Fetching {symbol} @ {desc} ({limit} candles)...")
+            
+            try:
+                df = fetch_candles(symbol, tf, limit)
+                if not df.empty:
+                    store_candles_postgresql(df, tf)  # ← NOW WITH timeframe
+                    print(f"   {symbol} {desc} → FED & STORED\n")
+                else:
+                    print(f"   No new data for {symbol} {desc}\n")
+            except Exception as e:
+                print(f"   FAILED: {e}\n")
+            
+            done += 1
+            time.sleep(0.5)
+    
+    print("ALL MODELS ARE NOW FULLY FED.")
+    print("You may now retrain: python train_one_coin.py")
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -179,7 +210,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.mode == "all":
-        populate_all_data()
+        #populate_all_data()
+        populate_multiple_symbols()
     else:
         print("Run: python fetch_data.py all")
 
