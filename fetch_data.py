@@ -142,52 +142,57 @@ def store_candles_postgresql(df, current_timeframe: str):
     conn.close()
     print(f"   Stored {count} rows [{row['symbol']} @ {db_timeframe}]")
 
-def populate_all_data():
-    total = len(SYMBOLS) * len(TIMEFRAMES)
-    done = 0
+# def populate_all_data():
+#     total = len(SYMBOLS) * len(TIMEFRAMES)
+#     done = 0
     
-    print("JOAI DATA HARVESTER ACTIVATED — Feeding all 60 models (12 coins × 5 timeframes)")
-    print(f"Total candles to fetch: ~100,000+\n")
+#     print("JOAI DATA HARVESTER ACTIVATED — Feeding all 60 models (12 coins × 5 timeframes)")
+#     print(f"Total candles to fetch: ~100,000+\n")
     
-    for symbol in SYMBOLS:
-        for tf, config in TIMEFRAMES.items():
-            desc = config["desc"]
-            limit = config["limit"]
+#     for symbol in SYMBOLS:
+#         for tf, config in TIMEFRAMES.items():
+#             desc = config["desc"]
+#             limit = config["limit"]
             
-            print(f"[{done+1}/{total}] Fetching {symbol} @ {desc} ({limit} candles)...")
+#             print(f"[{done+1}/{total}] Fetching {symbol} @ {desc} ({limit} candles)...")
             
-            try:
-                df = fetch_candles(symbol, tf, limit)
-                if not df.empty:
-                    store_candles_postgresql(df, tf)  # ← NOW WITH timeframe
-                    print(f"   {symbol} {desc} → FED & STORED\n")
-                else:
-                    print(f"   No new data for {symbol} {desc}\n")
-            except Exception as e:
-                print(f"   FAILED: {e}\n")
+#             try:
+#                 df = fetch_candles(symbol, tf, limit)
+#                 if not df.empty:
+#                     store_candles_postgresql(df, tf)  # ← NOW WITH timeframe
+#                     print(f"   {symbol} {desc} → FED & STORED\n")
+#                 else:
+#                     print(f"   No new data for {symbol} {desc}\n")
+#             except Exception as e:
+#                 print(f"   FAILED: {e}\n")
             
-            done += 1
-            time.sleep(0.5)
+#             done += 1
+#             time.sleep(0.5)
     
-    print("ALL MODELS ARE NOW FULLY FED.")
-    print("You may now retrain: python train_one_coin.py")
+#     print("ALL MODELS ARE NOW FULLY FED.")
+#     print("You may now retrain: python train_one_coin.py")
+# —————————————————————————————————————————————————————
+# FINAL ENTRY POINT — USED BY GITHUB ACTIONS & LOCAL
+# —————————————————————————————————————————————————————
 
 def populate_multiple_symbols():
-    """Main function used by GitHub Actions and local updater"""
-    print("JOAI DATA UPDATE VIA GITHUB ACTIONS / LOCAL SCRIPT")
-    print(f"Started at: {datetime.now()}")
-    print(f"Updating {len(SYMBOLS)} coins × {len(TIMEFRAMES)} timeframes")
+    """This function is called by update_data_local.py and GitHub Actions"""
+    from datetime import datetime
     
-    total = len(SYMBOLS) * len(TIMEFRAMES.keys())
-    done = 0
+    print("=" * 70)
+    print("JOAI DATA UPDATE — GITHUB ACTIONS / LOCAL SCRIPT")
+    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Updating {len(SYMBOLS)} coins × {len(TIMEFRAMES)} timeframes")
+    print("=" * 70)
+
+    total = len(SYMBOLS) * len(TIMEFRAMES)
+    completed = 0
 
     for symbol in SYMBOLS:
-        for tf_key, config in TIMEFRAMES.items():
-            tf = tf_key
-            limit = config["limit"] if isinstance(config, dict) else config
-            
-            done += 1
-            print(f"[{done:2d}/{total}] Fetching {symbol} @ {tf} ({limit} candles)... ", end="")
+        for tf, config in TIMEFRAMES.items():
+            limit = config["limit"]
+            completed += 1
+            print(f"[{completed}/{total}] {symbol} @ {tf} → ", end="", flush=True)
             
             df = fetch_candles(symbol, tf, limit)
             if not df.empty:
@@ -196,16 +201,17 @@ def populate_multiple_symbols():
             else:
                 print("No new data")
             
-            time.sleep(0.35)  # Be nice to Binance
+            time.sleep(0.4)  # Be gentle
 
-    print("="*70)
-    print("ALL DATA SUCCESSFULLY UPDATED")
-    print(f"Completed at: {datetime.now()}")
-    print("="*70)
+    print("=" * 70)
+    print("ALL DATA UPDATED SUCCESSFULLY")
+    print(f"Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 70)
 
+
+# Allow running directly: python fetch_data.py
 if __name__ == "__main__":
     populate_multiple_symbols()
-    
 # if __name__ == "__main__":
 #     import argparse
 #     parser = argparse.ArgumentParser()
