@@ -29,7 +29,7 @@ TIMEFRAMES = {
 # ]
 
 SYMBOLS = [
-   "BTC/USDT"
+   "BTCUSD"
 ]
 
 def get_latest_timestamp_in_db(symbol: str) -> int:
