@@ -59,40 +59,25 @@ def get_latest_timestamp_in_db(symbol: str) -> int:
 
 
 def fetch_candles(symbol: str, timeframe: str, limit: int = 1000):
-    print(f"Fetching {limit} {timeframe} candles for {symbol} via binance.us...")
-
-    # Force correct symbol format for binance.us
-    if symbol == "BTCUSD":
-        symbol_us = "BTCUSD"
-    elif symbol.endswith("/USDT"):
-        symbol_us = symbol.replace("/USDT", "USD")
-    else:
-        symbol_us = symbol.replace("/", "")
-
-    # Create binance.us exchange with forced URLs to avoid binance.com
-    exchange = ccxt.binanceus({
+   print(f"Fetching {limit} {timeframe} candles for {symbol} via binance.us...")
+    
+   symbol_us = symbol  # already "BTCUSD"
+    
+   exchange = ccxt.binanceus({
         'enableRateLimit': True,
         'timeout': 30000,
         'urls': {
-            'api': {
-                'public': 'https://api.binance.us/api',
-                'private': 'https://api.binance.us/api',
-            }
-        },
-        # Skip loading markets entirely — we know BTCUSD exists
-        'options': {
-            'defaultType': 'spot',
+            'api': {'public': 'https://api.binance.us/api/v3'}
         }
     })
+    
+    # Bypass broken market loading
+   exchange.markets = {'BTCUSD': {'symbol': 'BTCUSD', 'base': 'BTC', 'quote': 'USD'}}
+   exchange.has = {'fetchOHLCV': True}
 
-    # Manually set the market so it doesn't try to load from binance.com
-    exchange.markets = {'BTCUSD': {'id': 'BTCUSD', 'symbol': 'BTCUSD', 'base': 'BTC', 'quote': 'USD'}}
-    exchange.symbols = ['BTCUSD']
-    exchange.has = {'fetchOHLCV': True}
-
-    try:
+   try:
         candles = exchange.fetch_ohlcv(symbol_us, timeframe, limit=limit)
-    except Exception as e:
+   except Exception as e:
         print(f"  Error: {e} — retrying...")
         time.sleep(3)
         try:
@@ -101,18 +86,19 @@ def fetch_candles(symbol: str, timeframe: str, limit: int = 1000):
             print(f"  Failed twice: {e2}")
             return pd.DataFrame()
 
-    if not candles:
+   if not candles:
         print("  No candles returned")
         return pd.DataFrame()
 
-    candles.reverse()  # oldest first
-    df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df["symbol"] = "BTCUSD"  # Store consistently in DB
+   candles.reverse()  # oldest first
+   df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
+   df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+   df["symbol"] = "BTCUSD"  # Store consistently in DB
 
-    df = df.drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
-    print(f"  SUCCESS → {len(df)} candles | {df['timestamp'].iloc[0]} → {df['timestamp'].iloc[-1]}")
-    return df
+   df = df.drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+   print(f"  SUCCESS → {len(df)} candles | {df['timestamp'].iloc[0]} → {df['timestamp'].iloc[-1]}")
+   return df
+
 def store_candles_postgresql(df, current_timeframe: str):
     """
     Store candles with timeframe column
@@ -194,7 +180,6 @@ def store_candles_postgresql(df, current_timeframe: str):
 # —————————————————————————————————————————————————————
 
 def populate_multiple_symbols():
-    """This function is called by update_data_local.py and GitHub Actions"""
     from datetime import datetime
     
     print("=" * 70)
@@ -212,20 +197,19 @@ def populate_multiple_symbols():
             completed += 1
             print(f"[{completed}/{total}] {symbol} @ {tf} → ", end="", flush=True)
             
-            df = fetch_candles(symbol, tf, limit)
+            df = fetch_candles(symbol, tf, limit)  # ← symbol is now "BTCUSD"
             if not df.empty:
                 store_candles_postgresql(df, tf)
                 print(f"STORED {len(df)} rows")
             else:
                 print("No new data")
             
-            time.sleep(0.4)  # Be gentle
+            time.sleep(0.4)
 
     print("=" * 70)
     print("ALL DATA UPDATED SUCCESSFULLY")
     print(f"Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
-
 
 # Allow running directly: python fetch_data.py
 if __name__ == "__main__":
