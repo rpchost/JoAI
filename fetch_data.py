@@ -59,46 +59,60 @@ def get_latest_timestamp_in_db(symbol: str) -> int:
 
 
 def fetch_candles(symbol: str, timeframe: str, limit: int = 1000):
-    # exchange = ccxt.binance({
-    #     'enableRateLimit': True,
-    #     'options': {'defaultType': 'spot'},
-    #     'timeout': 30000,
-    # })
-    exchange = ccxt.binanceus({   # ← CHANGE TO binanceus
-    'enableRateLimit': True,
-    'timeout': 30000,
-})
+    print(f"Fetching {limit} {timeframe} candles for {symbol} via binance.us...")
 
-    symbol_clean = symbol.replace("/", "")
-    print(f"Fetching latest {limit} {timeframe} candles for {symbol}...")
+    # Force correct symbol format for binance.us
+    if symbol == "BTCUSD":
+        symbol_us = "BTCUSD"
+    elif symbol.endswith("/USDT"):
+        symbol_us = symbol.replace("/USDT", "USD")
+    else:
+        symbol_us = symbol.replace("/", "")
+
+    # Create binance.us exchange with forced URLs to avoid binance.com
+    exchange = ccxt.binanceus({
+        'enableRateLimit': True,
+        'timeout': 30000,
+        'urls': {
+            'api': {
+                'public': 'https://api.binance.us/api',
+                'private': 'https://api.binance.us/api',
+            }
+        },
+        # Skip loading markets entirely — we know BTCUSD exists
+        'options': {
+            'defaultType': 'spot',
+        }
+    })
+
+    # Manually set the market so it doesn't try to load from binance.com
+    exchange.markets = {'BTCUSD': {'id': 'BTCUSD', 'symbol': 'BTCUSD', 'base': 'BTC', 'quote': 'USD'}}
+    exchange.symbols = ['BTCUSD']
+    exchange.has = {'fetchOHLCV': True}
 
     try:
-        # NO 'since' → Binance always returns the most recent candles first
-        candles = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-    except Exception:
-        print("  Binance rate-limited or error → retrying once...")
-        time.sleep(2)
-        candles = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+        candles = exchange.fetch_ohlcv(symbol_us, timeframe, limit=limit)
+    except Exception as e:
+        print(f"  Error: {e} — retrying...")
+        time.sleep(3)
+        try:
+            candles = exchange.fetch_ohlcv(symbol_us, timeframe, limit=limit)
+        except Exception as e2:
+            print(f"  Failed twice: {e2}")
+            return pd.DataFrame()
 
-    if not candles or len(candles) == 0:
-        print("  No data received from Binance")
+    if not candles:
+        print("  No candles returned")
         return pd.DataFrame()
 
-    # Binance returns newest first → reverse to chronological order
-    candles.reverse()
-
+    candles.reverse()  # oldest first
     df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df["symbol"] = symbol_clean
+    df["symbol"] = "BTCUSD"  # Store consistently in DB
 
-    # Remove exact duplicates (just in case)
-    before = len(df)
-    df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
-    print(f"  Received {before} → kept {len(df)} unique candles")
-    print(f"  Date range: {df['timestamp'].iloc[0]} → {df['timestamp'].iloc[-1]}")
-
+    df = df.drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+    print(f"  SUCCESS → {len(df)} candles | {df['timestamp'].iloc[0]} → {df['timestamp'].iloc[-1]}")
     return df
-
 def store_candles_postgresql(df, current_timeframe: str):
     """
     Store candles with timeframe column
