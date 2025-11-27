@@ -66,48 +66,32 @@ def fetch_candles(symbol: str, timeframe: str, limit: int = 1000):
     })
 
     symbol_clean = symbol.replace("/", "")
-    since_ms = get_latest_timestamp_in_db(symbol_clean)
+    print(f"Fetching latest {limit} {timeframe} candles for {symbol}...")
 
-    # If we already have data, start from the next candle
-    if since_ms > 0:
-        # Binance expects 'since' to be the start of the candle AFTER the last one we have
-        timeframe_ms = exchange.parse_timeframe(timeframe) * 1000
-        since_ms += timeframe_ms  # jump to next candle
-        logger.info(f"Resuming {symbol} {timeframe} from {datetime.fromtimestamp(since_ms/1000)}")
+    try:
+        # NO 'since' → Binance always returns the most recent candles first
+        candles = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+    except Exception:
+        print("  Binance rate-limited or error → retrying once...")
+        time.sleep(2)
+        candles = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
 
-    all_candles = []
-    while len(all_candles) < limit:
-        try:
-            remaining = limit - len(all_candles)
-            candles = exchange.fetch_ohlcv(symbol, timeframe, since=since_ms, limit=min(1000, remaining))
-
-            if not candles:
-                break
-
-            # Stop if we got a candle we already have already (safety)
-            if candles[0][0] <= since_ms:
-                candles = [c for c in candles if c[0] > since_ms]
-
-            if not candles:
-                break
-
-            all_candles.extend(candles)
-            since_ms = candles[-1][0] + 1  # next fetch starts after this one
-            logger.info(f"  Fetched {len(candles)} new candles → total new: {len(all_candles)}")
-            time.sleep(0.3)
-
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            time.sleep(5)
-
-    if not all_candles:
-        logger.info(f"No new data for {symbol} {timeframe}")
+    if not candles or len(candles) == 0:
+        print("  No data received from Binance")
         return pd.DataFrame()
 
-    df = pd.DataFrame(all_candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
+    # Binance returns newest first → reverse to chronological order
+    candles.reverse()
+
+    df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df["symbol"] = symbol.replace("/", "")
-    df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp")
+    df["symbol"] = symbol_clean
+
+    # Remove exact duplicates (just in case)
+    before = len(df)
+    df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+    print(f"  Received {before} → kept {len(df)} unique candles")
+    print(f"  Date range: {df['timestamp'].iloc[0]} → {df['timestamp'].iloc[-1]}")
 
     return df
 
