@@ -35,3 +35,8 @@ jobs:
       - name: Log completion
         run: |
           echo "Data update completed at $(date)"
+
+      - name: Clear Python cache
+        run: |
+          find . -name "*.pyc" -delete
+          find . -name "__pycache__" -type d -exec rm -rf {} +
