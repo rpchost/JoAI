@@ -126,10 +126,11 @@ if __name__ == "__main__":
 
         scaler = MinMaxScaler()
         scaled = scaler.fit_transform(data)
-        target_scaler = MinMaxScaler().fit(data[:, 3].reshape(-1, 1))
-
+       
         X, y = create_sequences(scaled, SEQUENCE_LENGTH)
-        y = target_scaler.transform(y.reshape(-1, 1)).flatten()
+        y = y.copy()  # y is now raw close prices (no scaling!)
+        target_scaler = None  # we will save None or a dummy
+
         print(f"✓ Created {len(X)} training sequences")
 
         split = int(0.8 * len(X))

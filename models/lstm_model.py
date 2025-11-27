@@ -1,10 +1,13 @@
-# lstm_model.py — FINAL WORKING VERSION (2025) — PANDAS INDICATORS ONLY
+# lstm_model.py — FIXED PREDICTION VERSION (2025)
 import os
 import pickle
 import psycopg2
 import pandas as pd
 import numpy as np
 from tensorflow.keras.models import load_model
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # CONFIG
 MODEL_DIR = "models"
@@ -28,8 +31,17 @@ def load_model_and_scalers(symbol: str, db_tf: str):
         raise FileNotFoundError(f"Model missing: {model_path}")
 
     model = load_model(model_path)
-    scaler = pickle.load(open(scaler_path, "rb"))
-    target_scaler = pickle.load(open(target_scaler_path, "rb"))
+    
+    with open(scaler_path, "rb") as f:
+        scaler = pickle.load(f)
+    
+    with open(target_scaler_path, "rb") as f:
+        target_scaler = pickle.load(f)
+    
+    # Verify target_scaler is valid
+    if target_scaler is None or not hasattr(target_scaler, 'inverse_transform'):
+        raise ValueError(f"Invalid target_scaler for {symbol}_{db_tf}. Retrain the model!")
+    
     return model, scaler, target_scaler
 
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -88,7 +100,11 @@ def predict_next_candle(symbol: str, timeframe: str):
     db_tf = tf_map.get(timeframe, "1hour")
 
     # Fetch raw data
-    conn = psycopg2.connect(os.getenv("DATABASE_URL") + "?sslmode=require")
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return "Error: DATABASE_URL not configured"
+    
+    conn = psycopg2.connect(db_url + "?sslmode=require")
     query = """
         SELECT open, high, low, close, volume
         FROM crypto_candles
@@ -102,16 +118,28 @@ def predict_next_candle(symbol: str, timeframe: str):
         return "Not enough data"
 
     df = df.iloc[::-1].reset_index(drop=True)  # oldest first
-    df = calculate_indicators(df)  # ← THIS IS THE MAGIC
+    df = calculate_indicators(df)
 
     data = df[FEATURE_COLUMNS].tail(60).values.astype(float)
 
     try:
         model, scaler, target_scaler = load_model_and_scalers(symbol, db_tf)
+        
+        # Scale input features
         scaled = scaler.transform(data)
         seq = scaled.reshape(1, 60, -1)
+        
+        # Get prediction (this is a SCALED value between 0-1)
         pred_scaled = model.predict(seq, verbose=0)
+        
+        # CRITICAL: Inverse transform to get REAL price
         pred_price = target_scaler.inverse_transform(pred_scaled)[0][0]
+        
+        # Sanity check
+        if pred_price < 0 or pred_price > 1000000:
+            return f"Error: Unrealistic prediction ({pred_price:.2f}). Model needs retraining."
+        
         return f"${pred_price:,.2f}"
+        
     except Exception as e:
         return f"Error: {str(e)}"
