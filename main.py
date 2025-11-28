@@ -1098,41 +1098,44 @@ async def joai_master_endpoint(request: dict):
         return {"success": False, "error": "No question provided"}
 
     try:
-        # Step 1: Use your existing NLP parser to get full prediction object
+        # Step 1: Use NLP parser → gets full prediction object
         from nlp_parser import CryptoPredictionNLP
         nlp = CryptoPredictionNLP()
         nlp_result = nlp.process_query(user_question)
 
-        # Extract symbol and timeframe
         symbol = nlp_result.get("symbol", "BTC").upper().replace("USD", "USDT")
         timeframe = nlp_result.get("timeframe", "1 hour")
-
-        # Step 2: Get full LSTM prediction (the rich object from /nlp_predict)
         full_prediction = nlp_result.get("prediction", {})
-        lstm_price = full_prediction.get("close", 91450)
+
+        # CRITICAL FIX: Safely extract close price as float
+        raw_close = full_prediction.get("close", 91450)
+        try:
+            lstm_price = float(str(raw_close).replace("$", "").replace(",", "").strip())
+        except:
+            lstm_price = 91450.0
+
         direction = "bullish" if lstm_price >= 90000 else "bearish"
 
-        # Step 3: Build rich context and ask Groq (JoAI brain)
+        # Build rich context for Groq
         rich_question = f"""
-User asked: "{user_question}"
+User question: "{user_question}"
 
-Symbol: {symbol}
-Timeframe: {timeframe}
-LSTM Full Prediction:
-  Open: ${full_prediction.get('open', 0):,.2f}
-  High: ${full_prediction.get('high', 0):,.2f}
-  Low: ${full_prediction.get('low', 0):,.2f}
-  Close: ${lstm_price:,.2f}
-  Volume: {full_prediction.get('volume', 0):,.0f}
+Parsed:
+  Symbol: {symbol}
+  Timeframe: {timeframe}
+  LSTM Full Prediction:
+    Open:  {full_prediction.get('open', 'N/A')}
+    High:  {full_prediction.get('high', 'N/A')}
+    Low:   {full_prediction.get('low', 'N/A')}
+    Close: ${lstm_price:,.2f}
+    Volume: {full_prediction.get('volume', 'N/A'):,.0f}
 
-Current on-chain sentiment: Extreme Fear (25/100), decreasing exchange reserves, high mempool activity.
-
-Give a direct, confident, institutional-grade answer in 3–5 sentences. Be bold. No disclaimers.
+Current market: Extreme Fear (25/100), decreasing exchange reserves.
+Give a sharp, confident, institutional-grade answer in 3–5 sentences. Be bold.
         """.strip()
 
         joai_answer = ask_joai(rich_question)
 
-        # Final response — everything in one beautiful object
         return {
             "success": True,
             "question": user_question,
@@ -1141,13 +1144,16 @@ Give a direct, confident, institutional-grade answer in 3–5 sentences. Be bold
                 "timeframe": timeframe,
                 "intent": nlp_result.get("intent", "unknown")
             },
-            "lstm_prediction": full_prediction,  # ← Full object here!
+            "lstm_prediction": full_prediction,   # Full original object
+            "lstm_close_price": lstm_price,        # Clean float for logic
             "joai_analysis": joai_answer,
-            "source": "JoAI Ultimate Brain (NLP Parser + LSTM + On-Chain + Groq Llama-3.3-70B)",
+            "source": "JoAI Ultimate Brain v2",
             "timestamp": datetime.utcnow().isoformat()
         }
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "error": str(e),
