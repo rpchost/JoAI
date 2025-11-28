@@ -10,8 +10,8 @@ import json
 #load_dotenv()
 
 # === CONFIG ===
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-DATABASE_URL = os.getenv("DATABASE_URL")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY") #"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"
+DATABASE_URL = os.getenv("DATABASE_URL")#"postgresql://joai_user1:1Rim6AMqEOb0ZlApcFh8Ujrwt0ximlWN@dpg-d4acsls9c44c73e79or0-a.oregon-postgres.render.com/joai_db1"
 print(f"Groq key loaded: {'Yes' if GROQ_API_KEY else 'No'} (length: {len(GROQ_API_KEY) if GROQ_API_KEY else 0})")
 
 # === FREE ON-CHAIN DATA SOURCES (WORKING 2025) ===

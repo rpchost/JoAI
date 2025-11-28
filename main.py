@@ -1098,10 +1098,10 @@ async def joai_master_endpoint(request: dict):
         return {"success": False, "error": "No question provided"}
 
     try:
-        from nlp_parser import CryptoPredictionNLP
+        from nlp_parser import JoAIConversationNLP
         from datetime import datetime
 
-        nlp = CryptoPredictionNLP()
+        nlp = JoAIConversationNLP()
         nlp_result = nlp.process_query(user_question)
 
         symbol = nlp_result.get("symbol", "BTC").upper().replace("USD", "USDT")

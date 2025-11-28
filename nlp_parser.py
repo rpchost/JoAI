@@ -561,19 +561,62 @@ Want to know more? Ask me about any other indicator! 🚀"""
         
         return None
 
+    # def extract_timeframe(self, text: str) -> str:
+    #     text_lower = text.lower().strip()
+    #     mapping = {
+    #         '1m': '1 minute', '5m': '5 minutes', '15m': '15 minutes',
+    #         '1h': '1 hour', '4h': '4 hours',
+    #         'minute': '1 minute', 'minutes': '5 minutes',
+    #         'hour': '1 hour', 'hours': '4 hours',
+    #     }
+    #     for key, value in mapping.items():
+    #         if key in text_lower or value.replace(" ", "") in text_lower:
+    #             return value
+    #     return "1 hour"  # default
     def extract_timeframe(self, text: str) -> str:
-        text_lower = text.lower().strip()
-        mapping = {
-            '1m': '1 minute', '5m': '5 minutes', '15m': '15 minutes',
-            '1h': '1 hour', '4h': '4 hours',
-            'minute': '1 minute', 'minutes': '5 minutes',
-            'hour': '1 hour', 'hours': '4 hours',
-        }
-        for key, value in mapping.items():
-            if key in text_lower or value.replace(" ", "") in text_lower:
-                return value
-        return "1 hour"  # default
-    
+        text_lower = text.lower()
+
+        # Direct exact matches — highest priority
+        if any(phrase in text_lower for phrase in [
+            "1 minute", "1 min", "1minute", "one minute", "next minute", "1m "
+        ]):
+            return "1 minute"
+
+        if any(phrase in text_lower for phrase in [
+            "5 minute", "5 min", "5minute", "five minute"
+        ]):
+            return "5 minutes"
+
+        if any(phrase in text_lower for phrase in [
+            "15 minute", "15 min", "15minute", "fifteen minute"
+        ]):
+            return "15 minutes"
+
+        if any(phrase in text_lower for phrase in [
+            "1 hour", "1hour", "1h", "one hour", "next hour"
+        ]):
+            return "1 hour"
+
+        if any(phrase in text_lower for phrase in [
+            "4 hour", "4hour", "4h", "four hour"
+        ]):
+            return "4 hours"
+
+        if any(phrase in text_lower for phrase in [
+            "1 day", "daily", "1day"
+        ]):
+            return "1 day"
+
+        # Word-only fallback
+        if "minute" in text_lower and "hour" not in text_lower and "day" not in text_lower:
+            return "1 minute"
+        if "hour" in text_lower and "day" not in text_lower:
+            return "1 hour"
+        if "day" in text_lower:
+            return "1 day"
+
+        return "1 hour"  # final default
+   
     def parse_prediction_query(self, query: str) -> Optional[Dict]:
         """Parse prediction-specific queries"""
         symbol = self.extract_symbol(query)
