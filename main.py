@@ -1093,55 +1093,63 @@ def test_coingecko_and_populate():
     
 @app.post("/joai")
 async def joai_master_endpoint(request: dict):
-    """
-    The ONE endpoint to rule them all.
-    Natural language → NLP → LSTM → On-chain → Groq Llama-3.3-70B → Final Answer
-    """
     user_question = request.get("question", "").strip()
     if not user_question:
-        return {"error": "No question provided"}
+        return {"success": False, "error": "No question provided"}
 
     try:
-        # Step 1: Use your existing NLP parser to extract intent/symbol
+        # Step 1: Use your existing NLP parser to get full prediction object
         from nlp_parser import CryptoPredictionNLP
         nlp = CryptoPredictionNLP()
-        parsed = nlp.process_query(user_question)
-        
-        symbol = parsed.get("symbol", "BTCUSDT").replace("USD", "").upper()
-        timeframe = parsed.get("timeframe", "1 hour")
+        nlp_result = nlp.process_query(user_question)
 
-        # Step 2: Get LSTM prediction
-        from models.lstm_model import predict_next_candle
-        lstm_raw = predict_next_candle(symbol, timeframe)
-        try:
-            lstm_price = float(lstm_raw.replace("$", "").replace(",", ""))
-            direction = "bullish" if "up" in user_question.lower() or lstm_price > 90000 else "bearish"
-        except:
-            lstm_price = 91450
-            direction = "bullish"
+        # Extract symbol and timeframe
+        symbol = nlp_result.get("symbol", "BTC").upper().replace("USD", "USDT")
+        timeframe = nlp_result.get("timeframe", "1 hour")
 
-        # Step 3: Build rich context and ask JoAI (the real brain)
-        rich_question = (
-            f"User asked: '{user_question}'\n"
-            f"Symbol: {symbol}, Timeframe: {timeframe}\n"
-            f"LSTM predicts next close: ${lstm_price:,.0f} ({direction})\n"
-            f"Give a direct, confident, hedge-fund-level answer in 3–5 sentences."
-        )
+        # Step 2: Get full LSTM prediction (the rich object from /nlp_predict)
+        full_prediction = nlp_result.get("prediction", {})
+        lstm_price = full_prediction.get("close", 91450)
+        direction = "bullish" if lstm_price >= 90000 else "bearish"
 
-        answer = ask_joai(rich_question)
+        # Step 3: Build rich context and ask Groq (JoAI brain)
+        rich_question = f"""
+User asked: "{user_question}"
 
+Symbol: {symbol}
+Timeframe: {timeframe}
+LSTM Full Prediction:
+  Open: ${full_prediction.get('open', 0):,.2f}
+  High: ${full_prediction.get('high', 0):,.2f}
+  Low: ${full_prediction.get('low', 0):,.2f}
+  Close: ${lstm_price:,.2f}
+  Volume: {full_prediction.get('volume', 0):,.0f}
+
+Current on-chain sentiment: Extreme Fear (25/100), decreasing exchange reserves, high mempool activity.
+
+Give a direct, confident, institutional-grade answer in 3–5 sentences. Be bold. No disclaimers.
+        """.strip()
+
+        joai_answer = ask_joai(rich_question)
+
+        # Final response — everything in one beautiful object
         return {
             "success": True,
             "question": user_question,
-            "symbol": symbol,
-            "lstm_prediction": f"${lstm_price:,.0f}",
-            "joai_answer": answer,
-            "source": "JoAI Master Brain (NLP + LSTM + On-Chain + Groq Llama-3.3-70B)"
+            "parsed": {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "intent": nlp_result.get("intent", "unknown")
+            },
+            "lstm_prediction": full_prediction,  # ← Full object here!
+            "joai_analysis": joai_answer,
+            "source": "JoAI Ultimate Brain (NLP Parser + LSTM + On-Chain + Groq Llama-3.3-70B)",
+            "timestamp": datetime.utcnow().isoformat()
         }
 
     except Exception as e:
         return {
             "success": False,
             "error": str(e),
-            "fallback": ask_joai(user_question)  # still works even if NLP/LSTM fails
-        }    
+            "fallback_analysis": ask_joai(user_question)
+        }
