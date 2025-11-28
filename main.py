@@ -1093,25 +1093,34 @@ def test_coingecko_and_populate():
     
 @app.post("/joai")
 async def joai_master_endpoint(request: dict):
-    user_question = request.get("question", "").strip()
-    if not user_question:
-        return {"success": False, "error": "No question provided"}
+    # Extract query and user_id (with defaults)
+    query = request.get("query", "").strip()
+    user_id = request.get("user_id", "anonymous")
+
+    if not query:
+        return {
+            "success": False,
+            "error": "Missing 'query' field",
+            "user_id": user_id
+        }
 
     try:
         from nlp_parser import JoAIConversationNLP
         from datetime import datetime
 
+        # Initialize NLP processor
         nlp = JoAIConversationNLP()
-        nlp_result = nlp.process_query(user_question)
+        nlp_result = nlp.process_query(query)
 
-        symbol = nlp_result.get("symbol", "BTC").upper().replace("USD", "USDT")
-        timeframe = nlp_result.get("timeframe", "1 hour")
+        # Extract parsed info correctly
+        parsed_query = nlp_result.get("query") or {}
+        symbol = parsed_query.get("symbol", "BTCUSD")
+        timeframe = parsed_query.get("timeframe", "1 hour")
+
         full_prediction = nlp_result.get("prediction", {})
-
-        # ── SAFELY extract close price as float ──
+        
         def to_float(val, default=91450.0):
-            if val is None:
-                return default
+            if val is None: return default
             try:
                 return float(str(val).replace("$", "").replace(",", "").strip())
             except:
@@ -1121,44 +1130,41 @@ async def joai_master_endpoint(request: dict):
         lstm_open  = to_float(full_prediction.get("open"))
         lstm_high  = to_float(full_prediction.get("high"))
         lstm_low   = to_float(full_prediction.get("low"))
-        lstm_volume = to_float(full_prediction.get("volume", 0))
 
-        direction = "bullish" if lstm_close >= 90000 else "bearish"
-
-        # ── Build context for Groq (100% safe formatting) ──
-        rich_question = f"""
-User asked: "{user_question}"
+        # Build rich context for Groq
+        rich_prompt = f"""
+User (ID: {user_id}) asked: "{query}"
 
 Parsed:
-  Symbol: {symbol}
-  Timeframe: {timeframe}
-  LSTM Prediction (next {timeframe}):
-    Open:   ${lstm_open:,.2f}
-    High:   ${lstm_high:,.2f}
-    Low:    ${lstm_low:,.2f}
-    Close:  ${lstm_close:,.2f}
-    Volume: {lstm_volume:,.0f}
+  • Symbol: {symbol.replace('USD', '')}
+  • Timeframe: {timeframe}
+  • LSTM Prediction (next {timeframe}):
+    Open:  ${lstm_open:,.2f}
+    High:  ${lstm_high:,.2f}
+    Low:   ${lstm_low:,.2f}
+    Close: ${lstm_close:,.2f}
 
-Current sentiment: Extreme Fear (25/100), dropping exchange reserves.
-Give a sharp, confident, institutional answer in 3–5 sentences. Be bold.
+Current market: Extreme Fear, dropping exchange reserves, strong accumulation.
+Answer in 3–5 sharp, confident sentences. Be bold. Use real trader tone.
         """.strip()
 
-        joai_answer = ask_joai(rich_question)
+        joai_answer = ask_joai(rich_prompt)
 
         return {
             "success": True,
-            "question": user_question,
+            "query": query,
+            "user_id": user_id,
             "parsed": {
-                "symbol": symbol,
+                "symbol": symbol.replace("USD", ""),
                 "timeframe": timeframe,
-                "intent": nlp_result.get("intent", "unknown")
+                "intent": nlp_result.get("intent", "prediction")
             },
             "lstm_prediction": {
                 "open": round(lstm_open, 2),
                 "high": round(lstm_high, 2),
                 "low": round(lstm_low, 2),
                 "close": round(lstm_close, 2),
-                "volume": int(lstm_volume)
+                "volume": 0
             },
             "joai_analysis": joai_answer,
             "source": "JoAI Ultimate Brain v3 – Fully Unbreakable",
@@ -1171,5 +1177,6 @@ Give a sharp, confident, institutional answer in 3–5 sentences. Be bold.
         return {
             "success": False,
             "error": f"Server error: {str(e)}",
-            "fallback_analysis": ask_joai(user_question or "What is Bitcoin doing right now?")
+            "user_id": user_id,
+            "fallback_analysis": ask_joai(query or "What is Bitcoin doing?")
         }
