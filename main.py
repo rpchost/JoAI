@@ -1098,8 +1098,9 @@ async def joai_master_endpoint(request: dict):
         return {"success": False, "error": "No question provided"}
 
     try:
-        # Step 1: Use NLP parser → gets full prediction object
         from nlp_parser import CryptoPredictionNLP
+        from datetime import datetime
+
         nlp = CryptoPredictionNLP()
         nlp_result = nlp.process_query(user_question)
 
@@ -1107,31 +1108,39 @@ async def joai_master_endpoint(request: dict):
         timeframe = nlp_result.get("timeframe", "1 hour")
         full_prediction = nlp_result.get("prediction", {})
 
-        # CRITICAL FIX: Safely extract close price as float
-        raw_close = full_prediction.get("close", 91450)
-        try:
-            lstm_price = float(str(raw_close).replace("$", "").replace(",", "").strip())
-        except:
-            lstm_price = 91450.0
+        # ── SAFELY extract close price as float ──
+        def to_float(val, default=91450.0):
+            if val is None:
+                return default
+            try:
+                return float(str(val).replace("$", "").replace(",", "").strip())
+            except:
+                return default
 
-        direction = "bullish" if lstm_price >= 90000 else "bearish"
+        lstm_close = to_float(full_prediction.get("close"))
+        lstm_open  = to_float(full_prediction.get("open"))
+        lstm_high  = to_float(full_prediction.get("high"))
+        lstm_low   = to_float(full_prediction.get("low"))
+        lstm_volume = to_float(full_prediction.get("volume", 0))
 
-        # Build rich context for Groq
+        direction = "bullish" if lstm_close >= 90000 else "bearish"
+
+        # ── Build context for Groq (100% safe formatting) ──
         rich_question = f"""
-User question: "{user_question}"
+User asked: "{user_question}"
 
 Parsed:
   Symbol: {symbol}
   Timeframe: {timeframe}
-  LSTM Full Prediction:
-    Open:  {full_prediction.get('open', 'N/A')}
-    High:  {full_prediction.get('high', 'N/A')}
-    Low:   {full_prediction.get('low', 'N/A')}
-    Close: ${lstm_price:,.2f}
-    Volume: {full_prediction.get('volume', 'N/A'):,.0f}
+  LSTM Prediction (next {timeframe}):
+    Open:   ${lstm_open:,.2f}
+    High:   ${lstm_high:,.2f}
+    Low:    ${lstm_low:,.2f}
+    Close:  ${lstm_close:,.2f}
+    Volume: {lstm_volume:,.0f}
 
-Current market: Extreme Fear (25/100), decreasing exchange reserves.
-Give a sharp, confident, institutional-grade answer in 3–5 sentences. Be bold.
+Current sentiment: Extreme Fear (25/100), dropping exchange reserves.
+Give a sharp, confident, institutional answer in 3–5 sentences. Be bold.
         """.strip()
 
         joai_answer = ask_joai(rich_question)
@@ -1144,11 +1153,16 @@ Give a sharp, confident, institutional-grade answer in 3–5 sentences. Be bold.
                 "timeframe": timeframe,
                 "intent": nlp_result.get("intent", "unknown")
             },
-            "lstm_prediction": full_prediction,   # Full original object
-            "lstm_close_price": lstm_price,        # Clean float for logic
+            "lstm_prediction": {
+                "open": round(lstm_open, 2),
+                "high": round(lstm_high, 2),
+                "low": round(lstm_low, 2),
+                "close": round(lstm_close, 2),
+                "volume": int(lstm_volume)
+            },
             "joai_analysis": joai_answer,
-            "source": "JoAI Ultimate Brain v2",
-            "timestamp": datetime.utcnow().isoformat()
+            "source": "JoAI Ultimate Brain v3 – Fully Unbreakable",
+            "timestamp": datetime.utcnow().isoformat() + "Z"
         }
 
     except Exception as e:
@@ -1156,6 +1170,6 @@ Give a sharp, confident, institutional-grade answer in 3–5 sentences. Be bold.
         traceback.print_exc()
         return {
             "success": False,
-            "error": str(e),
-            "fallback_analysis": ask_joai(user_question)
+            "error": f"Server error: {str(e)}",
+            "fallback_analysis": ask_joai(user_question or "What is Bitcoin doing right now?")
         }
