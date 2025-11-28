@@ -1131,7 +1131,7 @@ async def joai_master_endpoint(request: dict):
         answer = ask_joai(rich_question)
 
         return {
-            "success": true,
+            "success": True,
             "question": user_question,
             "symbol": symbol,
             "lstm_prediction": f"${lstm_price:,.0f}",
@@ -1141,7 +1141,7 @@ async def joai_master_endpoint(request: dict):
 
     except Exception as e:
         return {
-            "success": false,
+            "success": False,
             "error": str(e),
             "fallback": ask_joai(user_question)  # still works even if NLP/LSTM fails
         }    
